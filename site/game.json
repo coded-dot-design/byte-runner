@@ -1,0 +1,64 @@
+{
+  "id": "byte-runner",
+  "author": "Chris Cooley",
+  "license": "MIT",
+  "name": "Byte Runner",
+  "kind": "DOM CHASE",
+  "tagline": "Eat the page. Flip the chase.",
+  "description": "Read between the lines, then eat them. Collect letters, catch an overclock orb, and turn the ghosts chasing you into points.",
+  "accent": "lime",
+  "icon": "runner",
+  "versionNote": "Six letters change everything.",
+  "controls": [
+    "Arrows / WASD \u2014 cardinal movement",
+    "Mouse \u2014 steer toward the pointer",
+    "P \u2014 pause \u00b7 G \u2014 next gate \u00b7 Esc \u2014 Recall"
+  ],
+  "facts": [
+    {
+      "value": "6",
+      "label": "letters per orb"
+    },
+    {
+      "value": "40",
+      "label": "ghost cap"
+    },
+    {
+      "value": "9s",
+      "label": "power ceiling"
+    }
+  ],
+  "loop": [
+    "Eat six letters",
+    "Collect the orb",
+    "Seal the gates",
+    "Hunt the ghosts"
+  ],
+  "chapters": [
+    {
+      "title": "The text is the trail.",
+      "body": "Nearby letters become points as the runner moves through them. The movement path is sampled every seven pixels so a slow frame does not skip a whole line of edible text. At most six letters are consumed per update. Consumed glyphs disappear visually while framework-owned text stays intact in the default mode."
+    },
+    {
+      "title": "Overclock reverses the rules.",
+      "body": "Every sixth fresh letter places an orb near the player. Collect it for six seconds of power, stacking up to nine seconds. Fruit starts appearing after fourteen seconds, then every eighteen. While powered, factories pause their spawning and ghosts flee. Collect the power-up itself; eating six letters alone does not activate it."
+    },
+    {
+      "title": "Three approaches to pursuit.",
+      "body": "Some ghosts chase your current position. Another kind aims sixty pixels ahead in your direction of travel. Speed grows with time-based waves, capped at 205 pixels per second. Ghost silhouettes and the runner\u2019s opening jaw use small canvas paths; their animation follows the simulation clock."
+    },
+    {
+      "title": "Small, finite, reusable.",
+      "body": "A shared entity pool caps ghosts at forty and uncollected pickups at four. Expired pickups and removed ghosts return their storage for reuse. Keyboard movement selects the most recently pressed axis when directions conflict, keeping the classic four-direction chase feel."
+    }
+  ],
+  "code": "const game = createByteRunner({\n  root: \"main\",\n  textSelector: \"h1, h2, p, li\",\n  targetSelector: \"[data-gate]\",\n  theme: \"system\",\n});\ngame.start();\n// Later: game.destroy();",
+  "importLine": "import { createByteRunner } from \"@coded-design/byte-runner\";",
+  "engine": "Shared TypeScript runtime",
+  "extra": "Three lives. Waves advance every twenty-two seconds. A powered ghost chain awards 100, 200, 300, then 400 points per ghost; spawning resumes after power expires.",
+  "sourcePaths": [
+    "src/simulation.ts",
+    "src/rules.ts",
+    "shared/ORIGIN.json"
+  ]
+}

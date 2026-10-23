@@ -1,5 +1,30 @@
 # Byte Runner · coded.design
 
+## Play and develop the Astro site
+
+Product page: https://coded-dot-design.github.io/byte-runner/ (available after Pages is enabled and the deployment succeeds). Created by **Chris Cooley / coded.design**.
+
+Use Node **24** (`nvm use`), then run from this repository, where `package.json` lives:
+
+```sh
+npm ci
+npm run dev
+```
+
+Open the exact local URL Astro prints, including the `/byte-runner/` base path. `npm ci` uses the committed lockfile. `npm run dev:playground` keeps the original Vite regression playground available. The product site loads built game distributions; after editing game source, run `npm run build` and restart `npm run dev`.
+
+```sh
+npm run check
+npm run site:build
+npm run site:preview
+```
+
+`site:build` writes static output to `artifacts/site` and checks the launch script, styles and Pages asset paths. Pages builds run on every push to `main`; PR checks also build the product site. One-time setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**. No custom domain or paid hosting is required for this public repository. If the deploy job ran before enabling Pages, rerun that failed job afterward.
+
+The page defaults to your system color scheme, with persistent light/dark overrides. Game launches are explicit and lazy-loaded. Recall destroys the active controller and restores eligible game-owned edits. Menu controls, code examples and the launcher are excluded from game targets.
+
+
+
 **The page is the game board.** A small, independent MIT-licensed DOM arcade game in the DOM VIRUS collection.
 
 Eat letters on a real webpage while ghosts emerge from buttons. Every six fresh letters spawns an orb nearby; collect it to stop new ghosts and eat existing ones. Power lasts six seconds and stacks to at most nine. Glitch fruit appears periodically. When power ends, gates reopen and spawning accelerates with each 22-second wave. Three lives; survive for a high score.
