@@ -1,12 +1,58 @@
-import { clamp, distance } from "@coded-design/dom-virus";
+import type {
+  GameContext,
+  GameSimulation,
+  GameStats,
+  Player,
+  Point,
+} from "@coded-design/dom-virus";
+interface Ghost extends Point {
+  age: number;
+  kind: number;
+  phase: number;
+}
+interface Pickup extends Point {
+  kind: "orb" | "fruit";
+  life: number;
+}
+export interface ByteRunnerStats extends GameStats {
+  score: number;
+  lives: number;
+  wave: number;
+  eaten: number;
+  power: number;
+  alive: number;
+  pickups: number;
+  player: Player;
+  detail: string;
+}
+import {
+  clamp,
+  distance,
+  EntityPool,
+  chooseSpawn,
+  translateEntities,
+} from "@coded-design/dom-virus";
 import { MAX_GHOSTS, spawnInterval, earnsOrb, extendPower } from "./rules.js";
 
-export function createGame(api) {
-  let player,
-    ghosts = [],
-    ghostPool = [],
-    pickups = [],
-    score = 0,
+export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
+  let player: Player = { x: 0, y: 0, angle: 0 };
+  const ghostPool = new EntityPool<Ghost>(MAX_GHOSTS, () => ({
+    x: 0,
+    y: 0,
+    age: 0,
+    kind: 0,
+    phase: 0,
+  }));
+  const pickupPool = new EntityPool<Pickup>(4, () => ({
+    x: 0,
+    y: 0,
+    kind: "orb",
+    life: 0,
+  }));
+  const ghosts = ghostPool.active,
+    pickups = pickupPool.active;
+  const old: Point = { x: 0, y: 0 };
+  let score = 0,
     lives = 3,
     wave = 1,
     eaten = 0,
@@ -17,9 +63,8 @@ export function createGame(api) {
     combo = 0;
   const reset = () => {
     player = { x: api.width * 0.45, y: api.height * 0.45, angle: 0 };
-    ghosts = [];
-    ghostPool = [];
-    pickups = [];
+    ghostPool.clear();
+    pickupPool.clear();
     score = 0;
     lives = 3;
     wave = 1;
@@ -32,25 +77,24 @@ export function createGame(api) {
   };
   function spawn() {
     if (ghosts.length >= MAX_GHOSTS) return;
-    const gates = api.board.targets.filter((t) => t.visible);
-    if (api.board.targets.length && !gates.length) return;
-    const gate = gates[Math.floor(api.random() * gates.length)],
-      r = gate?.rect;
-    const g = ghostPool.pop() || {};
+    const spawn = chooseSpawn(api.board.targets, api.random, api.width, 16);
+    if (!spawn) return;
+    const g = ghostPool.acquire();
+    if (!g) return;
     Object.assign(g, {
-      x: r ? (r.left + r.right) / 2 : api.random() * api.width,
-      y: r ? (r.top + r.bottom) / 2 : 16,
+      x: spawn.x,
+      y: spawn.y,
       age: 0,
       kind: Math.floor(api.random() * 3),
       phase: api.random() * 6.28,
     });
-    ghosts.push(g);
-    api.emit("spawn", { target: gate?.id });
+    api.emit("spawn", { target: spawn.target?.id });
   }
-  function pickup(kind = "orb") {
-    if (pickups.length >= 4) return;
+  function pickup(kind: Pickup["kind"] = "orb") {
+    const item = pickupPool.acquire();
+    if (!item) return;
     const angle = api.random() * Math.PI * 2;
-    pickups.push({
+    Object.assign(item, {
       x: clamp(player.x + Math.cos(angle) * 70, 25, api.width - 25),
       y: clamp(player.y + Math.sin(angle) * 70, 80, api.height - 25),
       kind,
@@ -58,8 +102,9 @@ export function createGame(api) {
     });
     api.emit("pickup-spawn", { kind });
   }
-  function update(dt) {
-    const old = { ...player };
+  function update(dt: number) {
+    old.x = player.x;
+    old.y = player.y;
     api.move(player, dt, 260, true); // Last pressed direction wins; no diagonal shortcuts.
     shield = Math.max(0, shield - dt);
     const before = power;
@@ -80,7 +125,7 @@ export function createGame(api) {
         7,
       )) {
         if (consumed >= 6) break;
-        if (api.board.consume(g, "erase")) {
+        if (g.rect && api.board.consume(g, "erase")) {
           eaten++;
           score += 10;
           consumed++;
@@ -100,15 +145,15 @@ export function createGame(api) {
       pickup("fruit");
     }
     for (let i = pickups.length - 1; i >= 0; i--) {
-      const p = pickups[i];
+      const p = pickups[i]!;
       p.life -= dt;
       if (distance(player, p) < 23) {
         power = extendPower(power);
         score += p.kind === "fruit" ? 100 : 25;
-        pickups.splice(i, 1);
+        pickupPool.releaseAt(i);
         api.burst(p.x, p.y, "#cbff69", 12);
         api.emit("power", { seconds: power });
-      } else if (p.life <= 0) pickups.splice(i, 1);
+      } else if (p.life <= 0) pickupPool.releaseAt(i);
     }
     if (power <= 0) {
       spawnIn -= dt;
@@ -118,7 +163,7 @@ export function createGame(api) {
       }
     }
     for (let i = ghosts.length - 1; i >= 0; i--) {
-      const g = ghosts[i];
+      const g = ghosts[i]!;
       g.age += dt;
       const aimX = player.x + (g.kind === 1 ? Math.cos(player.angle) * 60 : 0),
         aimY = player.y + (g.kind === 1 ? Math.sin(player.angle) * 60 : 0);
@@ -136,15 +181,13 @@ export function createGame(api) {
           combo++;
           score += 100 * Math.min(combo, 4);
           api.burst(g.x, g.y, "#b8a0ff", 12);
-          ghosts.splice(i, 1);
-          ghostPool.push(g);
+          ghostPool.releaseAt(i);
           api.emit("ghost-eaten", { score, combo });
         } else if (shield <= 0) {
           lives--;
           shield = 2.5;
           api.burst(player.x, player.y, "#ff8b92", 15);
-          ghosts.splice(i, 1);
-          ghostPool.push(g);
+          ghostPool.releaseAt(i);
           api.emit("hurt", { lives });
           if (lives <= 0) {
             api.finish();
@@ -157,14 +200,13 @@ export function createGame(api) {
         g.x < -api.width ||
         g.x > api.width * 2
       ) {
-        ghosts.splice(i, 1);
-        ghostPool.push(g);
+        ghostPool.releaseAt(i);
       }
     }
   }
-  function draw(ctx) {
+  function draw(ctx: CanvasRenderingContext2D) {
     for (const t of api.board.targets)
-      if (t.visible) {
+      if (t.visible && t.rect) {
         const r = t.rect;
         ctx.save();
         ctx.strokeStyle = power > 0 ? "#cbff69" : "#b899ff";
@@ -202,7 +244,9 @@ export function createGame(api) {
       ctx.save();
       ctx.translate(g.x, g.y);
       ctx.fillStyle =
-        power > 0 ? "#70a9ef" : ["#b491ff", "#ff9fba", "#7de2da"][g.kind];
+        power > 0
+          ? "#70a9ef"
+          : (["#b491ff", "#ff9fba", "#7de2da"][g.kind] ?? "#b491ff");
       ctx.strokeStyle = "#191627";
       ctx.lineWidth = 3;
       ctx.beginPath();
@@ -259,10 +303,8 @@ export function createGame(api) {
     update,
     draw,
     scroll(dx, dy) {
-      for (const item of [...ghosts, ...pickups]) {
-        item.x -= dx;
-        item.y -= dy;
-      }
+      translateEntities(ghosts, dx, dy);
+      translateEntities(pickups, dx, dy);
     },
     snapshot() {
       return {

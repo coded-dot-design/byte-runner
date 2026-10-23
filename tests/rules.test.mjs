@@ -5,7 +5,7 @@ import {
   extendPower,
   spawnInterval,
   MAX_GHOSTS,
-} from "../src/rules.js";
+} from "../src/rules.ts";
 test("six fresh letters unlock each new orb", () => {
   assert.equal(earnsOrb(0), false);
   assert.equal(earnsOrb(5), false);
