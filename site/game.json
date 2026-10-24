@@ -10,9 +10,9 @@
   "icon": "runner",
   "versionNote": "Six letters change everything.",
   "controls": [
-    "Arrows / WASD — cardinal movement",
-    "Mouse — steer toward the pointer",
-    "P — pause · G — next gate · Esc — Recall"
+    "Arrows / WASD \u2014 cardinal movement",
+    "Mouse \u2014 steer toward the pointer",
+    "P \u2014 pause \u00b7 G \u2014 next gate \u00b7 Esc \u2014 Recall"
   ],
   "facts": [
     {
@@ -45,7 +45,7 @@
     },
     {
       "title": "Three approaches to pursuit.",
-      "body": "Some ghosts chase your current position. Another kind aims sixty pixels ahead in your direction of travel. Speed grows with time-based waves, capped at 205 pixels per second. Ghost silhouettes and the runner’s opening jaw use small canvas paths; their animation follows the simulation clock."
+      "body": "Some ghosts chase your current position. Another kind aims sixty pixels ahead in your direction of travel. Speed grows with time-based waves, capped at 205 pixels per second. Ghost silhouettes and the runner\u2019s opening jaw use small canvas paths; their animation follows the simulation clock."
     },
     {
       "title": "Small, finite, reusable.",
@@ -74,28 +74,50 @@
       "name": "Chaser",
       "role": "Direct pursuit",
       "rules": "The violet ghost heads toward your current position. Without power, contact costs a life.",
-      "color": "#b491ff"
+      "color": "#a855ff"
     },
     {
       "icon": "ghost",
       "name": "Interceptor",
       "role": "Predictive pursuit",
       "rules": "The pink ghost aims ahead of your heading. Turn to change its interception point.",
-      "color": "#ff9fba"
+      "color": "#ff168f"
     },
     {
       "icon": "ghost",
       "name": "Sprinter",
       "role": "Fast pursuit",
       "rules": "The cyan ghost follows directly at a higher speed. All ghosts speed up as waves rise.",
-      "color": "#7de2da"
+      "color": "#00e5ff"
     },
     {
       "icon": "ghost",
       "name": "Vulnerable ghosts",
       "role": "Power window",
       "rules": "Eat an orb or fruit to seal the gates temporarily. Ghosts turn blue, flee and become edible. Chain catches for increasing points.",
-      "color": "#70a9ef"
+      "color": "#2875ff"
+    }
+  ],
+  "palette": [
+    {
+      "label": "Runner / bits",
+      "color": "#65ff00"
+    },
+    {
+      "label": "Chaser",
+      "color": "#a855ff"
+    },
+    {
+      "label": "Interceptor",
+      "color": "#ff168f"
+    },
+    {
+      "label": "Sprinter",
+      "color": "#00e5ff"
+    },
+    {
+      "label": "Vulnerable",
+      "color": "#2875ff"
     }
   ]
 }

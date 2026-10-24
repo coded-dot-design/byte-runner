@@ -134,7 +134,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
           api.burst(
             g.rect.left + g.rect.width / 2,
             g.rect.top + g.rect.height / 2,
-            "#cbff69",
+            "#65ff00",
             3,
           );
           if (earnsOrb(eaten)) pickup();
@@ -156,7 +156,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
           api.board.damage(gate, gate.health);
         score += p.kind === "fruit" ? 100 : 25;
         pickupPool.releaseAt(i);
-        api.burst(p.x, p.y, "#cbff69", 12);
+        api.burst(p.x, p.y, "#65ff00", 12);
         api.emit("power", { seconds: power });
       } else if (p.life <= 0) pickupPool.releaseAt(i);
     }
@@ -189,13 +189,13 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
         if (power > 0) {
           combo++;
           score += 100 * Math.min(combo, 4);
-          api.burst(g.x, g.y, "#b8a0ff", 12);
+          api.burst(g.x, g.y, "#a855ff", 12);
           ghostPool.releaseAt(i);
           api.emit("ghost-eaten", { score, combo });
         } else if (shield <= 0) {
           lives--;
           shield = 2.5;
-          api.burst(player.x, player.y, "#ff8b92", 15);
+          api.burst(player.x, player.y, "#ff343b", 15);
           ghostPool.releaseAt(i);
           api.emit("hurt", { lives });
           if (lives <= 0) {
@@ -217,7 +217,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
     for (const p of pickups) {
       ctx.save();
       ctx.translate(p.x, p.y);
-      ctx.fillStyle = p.kind === "fruit" ? "#ff9dce" : "#e4ff9f";
+      ctx.fillStyle = p.kind === "fruit" ? "#ff168f" : "#65ff00";
       ctx.strokeStyle = "#142522";
       ctx.lineWidth = 3;
       ctx.beginPath();
@@ -244,8 +244,8 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
       ctx.translate(g.x, g.y);
       ctx.fillStyle =
         power > 0
-          ? "#70a9ef"
-          : (["#b491ff", "#ff9fba", "#7de2da"][g.kind] ?? "#b491ff");
+          ? "#2875ff"
+          : (["#a855ff", "#ff168f", "#00e5ff"][g.kind] ?? "#a855ff");
       ctx.strokeStyle = "#191627";
       ctx.lineWidth = 3;
       ctx.beginPath();
@@ -271,7 +271,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
     ctx.translate(player.x, player.y);
     ctx.rotate(player.angle);
     if (shield > 0 || power > 0) {
-      ctx.strokeStyle = power > 0 ? "#caff7a" : "#fff";
+      ctx.strokeStyle = power > 0 ? "#65ff00" : "#fff";
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(0, 0, 24, 0, Math.PI * 2);
@@ -280,7 +280,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
     const jaw = api.reducedMotion
       ? 4
       : 3 + Math.abs(Math.sin(api.time * 11)) * 7;
-    ctx.fillStyle = power > 0 ? "#eeffb3" : "#cbff69";
+    ctx.fillStyle = power > 0 ? "#ffea00" : "#65ff00";
     ctx.strokeStyle = "#13271d";
     ctx.lineWidth = 3;
     ctx.beginPath();

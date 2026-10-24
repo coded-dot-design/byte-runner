@@ -17,7 +17,7 @@ export function createByteRunner(
     {
       id: "byte-runner",
       title: "BYTE RUNNER",
-      color: "#cbff69",
+      color: "#65ff00",
       hint: "Arrows / WASD · Eat 6 letters to spawn an orb · G: next gate",
       create: createGame,
     },
