@@ -1,5 +1,9 @@
 # 0.3.1
 
+## 0.4.2
+
+- Neon runner and ghost graphics with bright green binary highlights, palette guide, and active keyboard ownership.
+
 ## 0.4.1
 
 - Reversible mobile pinch/double-tap zoom lock while playing; native scrolling remains available. Pause and Recall restore the host policy. Set `lockZoom: false` to opt out.
