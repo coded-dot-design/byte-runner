@@ -214,16 +214,6 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
     }
   }
   function draw(ctx: CanvasRenderingContext2D) {
-    for (const t of api.board.targets)
-      if (t.visible && t.rect) {
-        const r = t.rect;
-        ctx.save();
-        ctx.strokeStyle = power > 0 ? "#cbff69" : "#b899ff";
-        ctx.lineWidth = 2;
-        ctx.setLineDash(power > 0 ? [4, 5] : []);
-        ctx.strokeRect(r.left - 3, r.top - 3, r.width + 6, r.height + 6);
-        ctx.restore();
-      }
     for (const p of pickups) {
       ctx.save();
       ctx.translate(p.x, p.y);
