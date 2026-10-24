@@ -1,100 +1,374 @@
-import type { GameContext } from '@coded-design/dom-virus';
-import type { Actor, Maze, Point, Wall } from './maze.js';
-
-// Original 14px sprites, with deliberately square silhouettes and readable eyes.
-export const RUNNER_OPEN = 'M4 0h6v1h2v2h2v1h-2v1h-2v1H8v2h2v1h2v1h2v1h-2v2h-2v1H4v-1H2v-2H1V9H0V5h1V3h1V1h2Z';
-export const RUNNER_CLOSED = 'M4 0h6v1h2v2h1v2h1v4h-1v2h-1v2h-2v1H4v-1H2v-2H1V9H0V5h1V3h1V1h2Z';
-export const GHOST = 'M4 0h6v1h2v2h1v2h1v9h-2v-2h-2v2H8v-2H6v2H4v-2H2v2H0V5h1V3h1V1h2Z';
-export const CHERRY = '<path d="M7 7V3h3V1h2v2h-1v6H9V5H8v4Z" fill="#4bce82"/><path d="M2 7h4v1h2v5H6v1H2v-1H1V9h1Zm8 2h4v1h1v4h-1v1h-4v-1H9v-4h1Z" fill="#f4457a"/><path d="M2 8h2v2H2zm8 2h2v2h-2Z" fill="#fff4ff"/>';
-export const BERRY = '<path d="M3 1h3v2h4V1h3v3h-3v2H6V4H3Z" fill="#4bce82"/><path d="M3 5h10v1h2v4h-2v2h-2v2H9v1H7v-1H5v-2H3v-2H1V6h2Z" fill="#ee6875"/><path d="M4 6h1v2H4zm6 0h1v2h-1zM7 9h1v2H7Z" fill="#fff4ff"/>';
-const NS = 'http://www.w3.org/2000/svg';
-export interface Frame { x: number; y: number; width: number; height: number; scaleX: number; scaleY: number; left: number; top: number; walls: Wall[]; key: string }
+import type { GameContext } from "@coded-design/dom-virus";
+import type { Actor, Maze, Point, Wall } from "./maze.js";
+import {
+  FROG,
+  FROG_BODIES,
+  FROG_EYES,
+  FROG_FEET,
+  FLY_BODY,
+  FLY_EYES,
+  FLY_PUPILS,
+  FLY_WINGS,
+  FLY_FEET,
+  FLY_COLORS,
+  FLY_EDGES,
+  WING,
+  CREAM,
+} from "./art.js";
+import { runnerFrame, wingFrame } from "./animation.js";
+import type { RunnerAnimation } from "./animation.js";
+export const CHERRY =
+  '<path d="M7 7V3h3V1h2v2h-1v6H9V5H8v4Z" fill="#4bce82"/><path d="M2 7h4v1h2v5H6v1H2v-1H1V9h1Zm8 2h4v1h1v4h-1v1h-4v-1H9v-4h1Z" fill="#f4457a"/><path d="M2 8h2v2H2zm8 2h2v2h-2Z" fill="#fff4ff"/>';
+export const BERRY =
+  '<path d="M3 1h3v2h4V1h3v3h-3v2H6V4H3Z" fill="#4bce82"/><path d="M3 5h10v1h2v4h-2v2h-2v2H9v1H7v-1H5v-2H3v-2H1V6h2Z" fill="#ee6875"/><path d="M4 6h1v2H4zm6 0h1v2h-1zM7 9h1v2H7Z" fill="#fff4ff"/>';
+const NS = "http://www.w3.org/2000/svg";
+export interface Frame {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  scaleX: number;
+  scaleY: number;
+  left: number;
+  top: number;
+  walls: Wall[];
+  solids: Wall[];
+  text: Wall[];
+  key: string;
+}
+interface Fly extends Actor {
+  id: number;
+  kind: number;
+  phase: number;
+}
+const set = (node: Element, key: string, value: string) => {
+  if (node.getAttribute(key) !== value) node.setAttribute(key, value);
+};
 export function createPresentation(api: GameContext) {
   const doc = api.options.document ?? globalThis.document;
-  const root = typeof api.options.root === 'string' ? doc.querySelector(api.options.root) : api.options.root ?? doc.body;
+  const root =
+    typeof api.options.root === "string"
+      ? doc.querySelector(api.options.root)
+      : (api.options.root ?? doc.body);
   const shadow = root && api.board.attach?.(root);
-  if (!shadow) throw new Error('Byte Runner needs an attachable HTML content root.');
+  if (!shadow)
+    throw new Error("Byte Runner needs an attachable HTML content root.");
   const host = shadow.host as HTMLElement;
-  host.style.setProperty('z-index', '2147482990', 'important');
-  const svg = doc.createElementNS(NS, 'svg');
-  svg.setAttribute('data-byte-maze', '');
-  svg.setAttribute('aria-hidden', 'true');
-  svg.style.cssText = 'position:absolute;pointer-events:none;overflow:hidden;isolation:isolate;';
+  host.style.setProperty("z-index", "2147482990", "important");
+  const svg = doc.createElementNS(NS, "svg");
+  svg.setAttribute("data-byte-maze", "");
+  svg.setAttribute("data-byte-trails", "");
+  svg.setAttribute("aria-hidden", "true");
+  svg.style.cssText =
+    "position:absolute;pointer-events:none;overflow:hidden;isolation:isolate;";
   shadow.append(svg);
-  let runner: SVGGElement, body: SVGPathElement, guard: SVGCircleElement, fruit: SVGGElement;
-  let ghostNodes: SVGGElement[] = [], pelletNodes: SVGElement[] = [];
-  let frame: Frame;
-  function measure(): Frame {
-    const r = host.getBoundingClientRect();
-    const scaleX = r.width / (host.clientWidth || r.width) || 1, scaleY = r.height / (host.clientHeight || r.height) || 1;
-    const left = Math.max(8, r.left), top = Math.max(8, r.top), right = Math.min(api.width - 8, r.right), bottom = Math.min(api.height - 8, r.bottom);
-    const wallElements = new Set<Element>(api.board.targets.map(t => t.element).filter(Boolean));
-    for (const el of root!.querySelectorAll('[data-byte-wall]')) if (!el.closest('[data-virus-ignore]')) wallElements.add(el);
-    const hud = doc.querySelector('[data-dom-virus-root]')?.shadowRoot;
-    for (const el of hud?.querySelectorAll('.hud,.dpad') ?? []) wallElements.add(el);
-    const walls: Wall[] = [];
-    for (const el of [...wallElements].slice(0, 50)) {
-      const b = el.getBoundingClientRect();
-      if (b.width && b.height && b.right > left && b.left < right && b.bottom > top && b.top < bottom) walls.push({ left: (b.left - left) / scaleX, right: (b.right - left) / scaleX, top: (b.top - top) / scaleY, bottom: (b.bottom - top) / scaleY });
+  let frame: Frame,
+    origin = { x: 0, y: 0 };
+  let runner: SVGGElement,
+    pose: SVGGElement,
+    torso: SVGGElement,
+    rim: SVGPathElement,
+    body: SVGPathElement,
+    stems: SVGPathElement,
+    cream: SVGPathElement,
+    pupils: SVGPathElement,
+    feet: SVGPathElement,
+    guard: SVGCircleElement,
+    fruit: SVGGElement,
+    flyLayer: SVGGElement;
+  let pellets: SVGElement[] = [];
+  const flies = new Map<
+    number,
+    {
+      node: SVGGElement;
+      wing: SVGPathElement;
+      body: SVGPathElement;
+      pupils: SVGPathElement;
     }
-    const width = Math.max(0, (right - left) / scaleX), height = Math.max(0, (bottom - top) / scaleY);
-    const x = (left - r.left) / scaleX, y = (top - r.top) / scaleY;
-    const key = [x, y, width, height, ...walls.flatMap(w => [w.left, w.top, w.right, w.bottom])].map(n => Math.round(n / 12)).join(',');
-    return { x, y, width, height, scaleX, scaleY, left, top, walls, key };
-  }
-  function mount(maze: Maze, nextFrame: Frame) {
-    frame = nextFrame;
-    svg.style.left = `${frame.x}px`; svg.style.top = `${frame.y}px`;
-    svg.setAttribute('width', String(frame.width)); svg.setAttribute('height', String(frame.height));
-    svg.setAttribute('viewBox', `0 0 ${frame.width || 1} ${frame.height || 1}`);
-    const dark = api.options.theme === 'dark' || (api.options.theme !== 'light' && doc.defaultView!.matchMedia('(prefers-color-scheme:dark)').matches);
-    const track = dark ? '#100a1bc7' : '#ffffffc7';
-    svg.innerHTML = `<path d="${maze.path}" stroke="#628dce" stroke-width="30" stroke-linecap="square" stroke-linejoin="miter" fill="none"/><path d="${maze.path}" stroke="${track}" stroke-width="26" stroke-linecap="square" stroke-linejoin="miter" fill="none"/><g data-byte-food></g><g data-byte-fruit visibility="hidden" shape-rendering="crispEdges"></g><g data-byte-ghosts></g><g data-byte-runner><circle r="17" fill="none" stroke="#8573ee" stroke-width="2"/><g data-byte-body shape-rendering="crispEdges"><path fill="#cdde00" stroke="#222e56" stroke-width=".6" d="${RUNNER_OPEN}"/><path d="M5 2h2v2H5Z" fill="#222e56"/></g></g>`;
-    const food = svg.querySelector('[data-byte-food]')!;
-    pelletNodes = maze.pellets.map(p => {
-      const node = doc.createElementNS(NS, p.power ? 'g' : 'circle');
-      node.setAttribute(p.power ? 'data-byte-power' : 'data-byte-pellet', String(p.id));
-      if (p.power) { node.setAttribute('transform', `translate(${p.x} ${p.y})`); node.innerHTML = '<circle r="12" fill="#f4457a" opacity=".16"/><circle r="9" fill="#f4457a" opacity=".3"/><circle r="6" fill="#f4457a" stroke="#fff4ff" stroke-width="1.5"/>'; }
-      else { node.setAttribute('cx', String(p.x)); node.setAttribute('cy', String(p.y)); node.setAttribute('r', '2.8'); node.setAttribute('fill', dark ? '#fff4df' : '#6758bd'); }
-      if (p.eaten) node.setAttribute('visibility', 'hidden');
-      food.append(node); return node;
+  >();
+  function measure(): Frame {
+    const box = host.getBoundingClientRect(),
+      scaleX = box.width / (host.clientWidth || box.width) || 1,
+      scaleY = box.height / (host.clientHeight || box.height) || 1;
+    const left = Math.max(8, box.left),
+      top = Math.max(8, box.top),
+      right = Math.min(api.width - 8, box.right),
+      bottom = Math.min(api.height - 8, box.bottom);
+    const convert = (r: {
+      left: number;
+      right: number;
+      top: number;
+      bottom: number;
+    }): Wall => ({
+      left: (r.left - left) / scaleX,
+      right: (r.right - left) / scaleX,
+      top: (r.top - top) / scaleY,
+      bottom: (r.bottom - top) / scaleY,
     });
-    runner = svg.querySelector<SVGGElement>('[data-byte-runner]')!;
-    body = runner.querySelector('path')!; guard = runner.querySelector('circle')!;
-    fruit = svg.querySelector('[data-byte-fruit]')!;
-    ghostNodes = []; lastMouth = -1;
-  }
-  let origin = { x: 0, y: 0 };
-  const syncPosition = () => { const r = host.getBoundingClientRect(); origin = { x: r.left, y: r.top }; };
-  const viewport = (p: Point): Point => ({ x: origin.x + (frame.x + p.x) * frame.scaleX, y: origin.y + (frame.y + p.y) * frame.scaleY });
-  let lastMouth = -1;
-  return {
-    measure, mount, viewport, syncPosition,
-    eat(id: number) { pelletNodes[id]?.setAttribute('visibility', 'hidden'); },
-    render(player: Actor | null, ghosts: readonly (Actor & { kind: number })[], power: number, shield: number, bonus: (Point & { kind: number }) | null) {
-      if (!runner) return;
-      runner.setAttribute('visibility', player ? 'visible' : 'hidden');
-      if (!player) return;
-      runner.setAttribute('transform', `translate(${player.x.toFixed(2)} ${player.y.toFixed(2)})`);
-      runner.querySelector('[data-byte-body]')!.setAttribute('transform', `rotate(${Math.max(0, player.direction) * 90}) scale(1.65) translate(-7 -7)`);
-      guard.setAttribute('visibility', power > 0 || shield > 0 ? 'visible' : 'hidden');
-      guard.setAttribute('stroke', power > 0 ? '#f4457a' : '#8573ee');
-      const mouth = api.reducedMotion ? 1 : Math.floor(api.time * 9) % 2;
-      if (mouth !== lastMouth) { body.setAttribute('d', mouth ? RUNNER_OPEN : RUNNER_CLOSED); lastMouth = mouth; }
-      const layer = svg.querySelector('[data-byte-ghosts]')!;
-      while (ghostNodes.length < ghosts.length) {
-        const g = doc.createElementNS(NS, 'g'); g.setAttribute('data-byte-ghost', ''); g.setAttribute('shape-rendering', 'crispEdges');
-        g.innerHTML = `<path d="${GHOST}" stroke="#222e56" stroke-width=".6"/><path fill="#fff4ff" d="M2 4h4v5H2zm6 0h4v5H8Z"/><path data-pupils fill="#222e56" d="M4 5h2v3H4zm6 0h2v3h-2Z"/>`; layer.append(g); ghostNodes.push(g);
+    const visible = (r: DOMRect) =>
+      r.width > 0 &&
+      r.height > 0 &&
+      r.right > left &&
+      r.left < right &&
+      r.bottom > top &&
+      r.top < bottom;
+    const explicit = new Set<Element>(
+      root!.querySelectorAll("[data-byte-wall]"),
+    );
+    const hud = doc.querySelector("[data-dom-virus-root]")?.shadowRoot;
+    for (const el of hud?.querySelectorAll(".hud,.dpad") ?? [])
+      explicit.add(el);
+    const targets = new Set<Element>([
+      ...api.board.targets.map((t) => t.element).filter(Boolean),
+      ...explicit,
+    ]);
+    const walls: Wall[] = [],
+      solids: Wall[] = [];
+    for (const el of [...targets].slice(0, 50)) {
+      const r = el.getBoundingClientRect();
+      if (visible(r)) {
+        const w = convert(r);
+        walls.push(w);
+        if (explicit.has(el)) solids.push(w);
       }
-      while (ghostNodes.length > ghosts.length) ghostNodes.pop()!.remove();
-      ghosts.forEach((g, i) => {
-        const node = ghostNodes[i]!;
-        node.setAttribute('transform', `translate(${g.x.toFixed(2)} ${g.y.toFixed(2)}) scale(1.6) translate(-7 -7)`);
-        node.firstElementChild!.setAttribute('fill', power > 0 ? (power < 2 && Math.floor(api.time * 5) % 2 ? '#fff4ff' : '#628dce') : ['#8573ee', '#f4457a', '#06c4ff'][g.kind % 3]!);
-        node.querySelector('[data-pupils]')!.setAttribute('transform', `translate(${g.direction === 2 ? -2 : g.direction === 0 ? 0 : -1} ${g.direction === 1 ? 1 : g.direction === 3 ? -1 : 0})`);
-      });
-      fruit.setAttribute('visibility', bonus ? 'visible' : 'hidden');
-      if (bonus) { fruit.setAttribute('transform', `translate(${bonus.x - 12} ${bonus.y - 12}) scale(1.6)`); if (fruit.getAttribute('data-kind') !== String(bonus.kind)) { fruit.setAttribute('data-kind', String(bonus.kind)); fruit.innerHTML = bonus.kind ? BERRY : CHERRY; } }
+    }
+    // Real text line boxes provide the whitespace. One bounded measurement pass,
+    // not fake text, wrapper nodes, or per-frame reconstruction.
+    const text: Wall[] = [],
+      seen = new Set<Text>(),
+      range = doc.createRange();
+    for (const glyph of api.board.glyphs) {
+      const node = glyph.record.node;
+      if (seen.has(node) || !node.isConnected) continue;
+      seen.add(node);
+      const parent = node.parentElement;
+      if (!parent || !visible(parent.getBoundingClientRect())) continue;
+      range.selectNodeContents(node);
+      for (const r of range.getClientRects())
+        if (visible(r) && text.length < 120) text.push(convert(r));
+      if (text.length >= 120 || seen.size >= 90) break;
+    }
+    const width = Math.max(0, (right - left) / scaleX),
+      height = Math.max(0, (bottom - top) / scaleY),
+      x = (left - box.left) / scaleX,
+      y = (top - box.top) / scaleY;
+    const key =
+      [
+        x,
+        y,
+        width,
+        height,
+        ...walls.flatMap((w) => [w.left, w.top, w.right, w.bottom]),
+      ]
+        .map((n) => Math.round(n / 12))
+        .join(",") +
+      "|" +
+      text
+        .flatMap((r) => [r.left, r.top, r.right, r.bottom])
+        .map((n) => Math.round(n / 28))
+        .join(",");
+    return {
+      x,
+      y,
+      width,
+      height,
+      scaleX,
+      scaleY,
+      left,
+      top,
+      walls,
+      solids,
+      text,
+      key,
+    };
+  }
+  function mount(maze: Maze, next: Frame) {
+    frame = next;
+    svg.style.left = `${frame.x}px`;
+    svg.style.top = `${frame.y}px`;
+    set(svg, "width", String(frame.width));
+    set(svg, "height", String(frame.height));
+    set(svg, "viewBox", `0 0 ${frame.width || 1} ${frame.height || 1}`);
+    // Only food and creatures are painted. The page supplies every surface.
+    svg.innerHTML =
+      '<g data-byte-food></g><g data-byte-fruit visibility="hidden" shape-rendering="crispEdges"></g><g data-byte-flies></g><g data-byte-runner><circle r="17" fill="none" stroke-width="2"/><g transform="translate(-12 -13)"><g data-byte-pose shape-rendering="crispEdges"><path data-byte-feet/><g data-byte-torso><path data-byte-rim/><path data-byte-body/><g data-byte-eyes><path data-stems/><path data-cream/><path data-pupils/></g></g></g></g></g>';
+    const dark =
+      api.options.theme === "dark" ||
+      (api.options.theme !== "light" &&
+        doc.defaultView!.matchMedia("(prefers-color-scheme:dark)").matches);
+    const food = svg.querySelector("[data-byte-food]")!;
+    pellets = maze.pellets.map((p) => {
+      const n = doc.createElementNS(NS, p.power ? "g" : "rect");
+      n.setAttribute(
+        p.power ? "data-byte-power" : "data-byte-pellet",
+        String(p.id),
+      );
+      if (p.power) {
+        n.setAttribute("transform", `translate(${p.x} ${p.y})`);
+        n.innerHTML =
+          '<rect x="-11" y="-11" width="22" height="22" fill="#f4457a" opacity=".1"/><rect x="-8" y="-8" width="16" height="16" fill="#f4457a" opacity=".24"/><rect x="-5" y="-5" width="10" height="10" fill="#f4457a" stroke="#fff5d7" stroke-width="1.5"/>';
+      } else {
+        n.setAttribute("x", String(p.x - 2));
+        n.setAttribute("y", String(p.y - 2));
+        n.setAttribute("width", "4");
+        n.setAttribute("height", "4");
+        n.setAttribute("fill", dark ? "#fff5d7" : "#6758bd");
+        n.setAttribute("stroke", dark ? "#222e56" : "#fff");
+        n.setAttribute("stroke-width", ".65");
+      }
+      if (p.eaten) n.setAttribute("visibility", "hidden");
+      food.append(n);
+      return n;
+    });
+    runner = svg.querySelector("[data-byte-runner]")!;
+    pose = svg.querySelector("[data-byte-pose]")!;
+    torso = svg.querySelector("[data-byte-torso]")!;
+    rim = svg.querySelector("[data-byte-rim]")!;
+    body = svg.querySelector("[data-byte-body]")!;
+    feet = svg.querySelector("[data-byte-feet]")!;
+    stems = svg.querySelector("[data-stems]")!;
+    cream = svg.querySelector("[data-cream]")!;
+    pupils = svg.querySelector("[data-pupils]")!;
+    guard = runner.querySelector("circle")!;
+    fruit = svg.querySelector("[data-byte-fruit]")!;
+    flyLayer = svg.querySelector("[data-byte-flies]")!;
+    flies.clear();
+  }
+  const syncPosition = () => {
+    const r = host.getBoundingClientRect();
+    origin = { x: r.left, y: r.top };
+  };
+  const viewport = (p: Point): Point => ({
+    x: origin.x + (frame.x + p.x) * frame.scaleX,
+    y: origin.y + (frame.y + p.y) * frame.scaleY,
+  });
+  const local = (p: Point): Point => ({
+    x: (p.x - origin.x) / frame.scaleX - frame.x,
+    y: (p.y - origin.y) / frame.scaleY - frame.y,
+  });
+  function render(
+    player: Actor | null,
+    enemies: readonly Fly[],
+    power: number,
+    shield: number,
+    bonus: (Point & { kind: number }) | null,
+    animation: RunnerAnimation,
+  ) {
+    if (!runner) return;
+    set(runner, "visibility", player ? "visible" : "hidden");
+    if (!player) return;
+    set(
+      runner,
+      "transform",
+      `translate(${player.x.toFixed(2)} ${player.y.toFixed(2)})`,
+    );
+    const facing = Math.max(0, player.direction),
+      f = runnerFrame(animation, api.time, api.reducedMotion),
+      pixels = FROG_BODIES[facing]![f.mouth]!,
+      eyes = facing === 1 || facing === 3 ? FROG_EYES.front : FROG_EYES.side;
+    set(
+      pose,
+      "transform",
+      facing === 2 ? "translate(24 0) scale(-1 1)" : "translate(0 0)",
+    );
+    set(pose, "data-facing", String(facing));
+    set(torso, "transform", `translate(0 ${f.bob})`);
+    set(rim, "d", pixels.rim);
+    set(body, "d", pixels.body);
+    set(body, "data-mouth", String(f.mouth));
+    set(rim, "fill", power ? FROG.powerEdge : FROG.edge);
+    set(body, "fill", power ? FROG.power : FROG.body);
+    set(stems, "fill", power ? FROG.power : FROG.body);
+    set(stems, "d", eyes.stems);
+    set(cream, "d", eyes.cream);
+    set(cream, "fill", FROG.eye);
+    set(pupils, "d", eyes.pupils);
+    set(pupils, "fill", FROG.pupil);
+    set(
+      pupils,
+      "transform",
+      `translate(0 ${facing === 1 ? 1 : facing === 3 ? -1 : 0})`,
+    );
+    set(feet, "d", FROG_FEET[f.step]!);
+    set(feet, "fill", power ? FROG.power : FROG.body);
+    set(feet, "data-frame", String(f.step));
+    set(guard, "visibility", power > 0 || shield > 0 ? "visible" : "hidden");
+    set(guard, "stroke", power > 0 ? "#f4457a" : "#8573ee");
+    const alive = new Set<number>();
+    for (const g of enemies) {
+      alive.add(g.id);
+      let sprite = flies.get(g.id);
+      if (!sprite) {
+        const n = doc.createElementNS(NS, "g");
+        n.setAttribute("data-byte-fly", String(g.id));
+        n.setAttribute("shape-rendering", "crispEdges");
+        n.innerHTML = `<path data-wings fill="${WING}" stroke="#445479" stroke-width=".6"/><path d="${FLY_FEET}" fill="#273148"/><path data-body d="${FLY_BODY}" stroke-width=".65"/><path d="${FLY_EYES}" fill="${CREAM}"/><path data-pupils d="${FLY_PUPILS}" fill="#152820"/>`;
+        flyLayer.append(n);
+        sprite = {
+          node: n,
+          wing: n.querySelector("[data-wings]")!,
+          body: n.querySelector("[data-body]")!,
+          pupils: n.querySelector("[data-pupils]")!,
+        };
+        flies.set(g.id, sprite);
+      }
+      set(
+        sprite.node,
+        "transform",
+        `translate(${(g.x - 13).toFixed(2)} ${(g.y - 11).toFixed(2)})`,
+      );
+      const flap = wingFrame(api.time, g.phase, api.reducedMotion);
+      set(sprite.wing, "d", FLY_WINGS[flap]!);
+      set(sprite.wing, "data-frame", String(flap));
+      const warning =
+        power > 0 &&
+        power < 2 &&
+        !api.reducedMotion &&
+        Math.floor(api.time * 2) % 2;
+      set(
+        sprite.body,
+        "fill",
+        power > 0 ? (warning ? "#86a8df" : "#628dce") : FLY_COLORS[g.kind % 3]!,
+      );
+      set(
+        sprite.body,
+        "stroke",
+        power > 0 ? "#394f78" : FLY_EDGES[g.kind % 3]!,
+      );
+      set(sprite.node, "data-vulnerable", String(power > 0));
+      set(
+        sprite.pupils,
+        "transform",
+        `translate(${g.direction === 2 ? -2 : g.direction === 0 ? 0 : -1} ${g.direction === 1 ? 1 : g.direction === 3 ? -1 : 0})`,
+      );
+    }
+    for (const [id, sprite] of flies)
+      if (!alive.has(id)) {
+        sprite.node.remove();
+        flies.delete(id);
+      }
+    set(fruit, "visibility", bonus ? "visible" : "hidden");
+    if (bonus) {
+      set(
+        fruit,
+        "transform",
+        `translate(${bonus.x - 12} ${bonus.y - 12}) scale(1.6)`,
+      );
+      if (fruit.getAttribute("data-kind") !== String(bonus.kind)) {
+        set(fruit, "data-kind", String(bonus.kind));
+        fruit.innerHTML = bonus.kind ? BERRY : CHERRY;
+      }
+    }
+  }
+  return {
+    measure,
+    mount,
+    viewport,
+    local,
+    syncPosition,
+    render,
+    eat(id: number) {
+      pellets[id] && set(pellets[id]!, "visibility", "hidden");
     },
   };
 }

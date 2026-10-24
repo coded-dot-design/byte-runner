@@ -17,8 +17,8 @@ export function createByteRunner(
     {
       id: "byte-runner",
       title: "BYTE RUNNER",
-      color: "#4bce82",
-      hint: "Arrows / WASD · Follow the pellets · Clear the maze · G: next area",
+      color: "#3ecb74",
+      hint: "Arrows / WASD · Follow the pellets · Clear the trails · G: next area",
       create: createGame,
     },
     { targetEffects: "liquid", ...options, controls: "keyboard" },

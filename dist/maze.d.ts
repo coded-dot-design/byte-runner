@@ -34,7 +34,7 @@ export declare function direction(a: Point, b: Point): 0 | 1 | 2 | 3;
 export declare function blocked(a: Point, b: Point, walls: readonly Wall[], padding?: number): boolean;
 export declare function distances(maze: Maze, start: number): Int16Array<ArrayBuffer>;
 export declare function closest(maze: Maze, point: Point): number;
-export declare function makeMaze(width: number, height: number, walls: readonly Wall[], random: () => number): Maze;
+export declare function makeMaze(width: number, height: number, walls: readonly Wall[], random: () => number, text?: readonly Wall[]): Maze;
 export interface Actor extends Point {
     from: number;
     to: number;

@@ -27,7 +27,7 @@ The page defaults to your system color scheme, with persistent light/dark overri
 
 **The page is the game board.** A small, independent MIT-licensed DOM arcade game in the DOM VIRUS collection.
 
-A connected maze of small pellets and glowing power pellets fills the visible content area. Native page buttons and `[data-byte-wall]` elements are walls. Clear the food to earn a 500 × level bonus and advance to a fresh maze; letters along the corridors remain optional edible page content. Power pellets turn ghosts edible for six seconds (stacking to nine). Cherries and strawberries award bonus points. Three lives, three initial ghosts, up to eight on later levels.
+Food trails follow real UI whitespace and gutters, with small pixel squares, larger glowing power squares, and fruit. The round green frog can leave the trails to eat real page letters; only explicitly marked walls and controls block it. Clear food for a 500 × level bonus. Power makes flies edible for six seconds (stacking to nine). Three lives, three initial flies, up to eight on later levels.
 
 ## Run locally
 
@@ -95,7 +95,7 @@ With no config, the root is `document.body`; text defaults to h1–h6, p, li, bl
 
 Hits replace characters in the existing DOM Text nodes with literal 0 or 1. There are no canvas replacement letters, cloned text, or per-letter wrappers. The ownership ledger records the original and latest game-written value per node. Recall restores only still-owned values; newer host edits win. Changing a proportional-font letter into a digit can reflow text, so the bounded geometry cache is invalidated and refreshed.
 
-Ghosts spawn on reachable corridors far from the player and route through the same maze. Use **G** or **Next gate** to travel to another section; ordinary scrolling remains available. SVG maze tiles, pellets and sprites are attached inside the selected HTML root, so they follow native scrolling and transforms even while paused. The active board adapts after a viewport change while retaining progress, without awarding points or clearing a level. Explicit walls use `[data-byte-wall]`; no pellets are placed in disconnected regions.
+Flies spawn on reachable corridors far from the player and route through the same maze. Use **G** or **Next gate** to travel to another section; ordinary scrolling remains available. SVG food and sprites are attached inside the selected HTML root, so they follow native scrolling and transforms even while paused. The active board adapts after a viewport change while retaining progress, without awarding points or clearing a level. Explicit walls use `[data-byte-wall]`; no pellets are placed in disconnected regions.
 
 ## React
 
@@ -129,7 +129,7 @@ npm run playground:build
 
 `src/simulation.ts` owns gameplay, `src/maze.ts` owns connected corridor generation and movement, and `src/presentation.ts` owns native SVG sprites and food. `src/rules.ts` owns balance constants. `src/index.ts` exposes the factory. The engine, shared entity pools, factory selection and React lifecycle adapter are maintained once in DOM VIRUS. All engine and game implementation sources use strict TypeScript. Generated declarations preserve game-specific snapshot fields and ship with the package; the browser receives plain JavaScript. This repository includes a generated, versioned `shared/core.js` snapshot with its source fingerprint in `shared/ORIGIN.json`; do not edit that generated file. Builds use the snapshot, so this repo works independently. A sibling `dom-virus` checkout enables live source iteration in Vite. To refresh the engine snapshot, run `npm run sync:games` in that checkout, then rebuild this game. A game build never silently replaces its pinned snapshot. A runtime update never silently changes a released game.
 
-The regular distribution is budgeted below **24 KB gzip including its runtime**. Runtime entities and geometry work are capped: at most 300 maze cells, fewer than 2,000 static food nodes, eight ghosts and one bonus fruit. The increased budget pays for connected maze generation, corridor pathfinding and native DOM presentation. Tests and Vite never ship in the package. See [shared performance notes](https://github.com/coded-dot-design/dom-virus/blob/main/PERFORMANCE.md) and [reference study](https://github.com/coded-dot-design/dom-virus/blob/main/REFERENCES.md).
+The regular distribution is budgeted below **24 KB gzip including its runtime**. Runtime entities and geometry work are capped: at most 300 maze cells, fewer than 2,000 static food nodes, eight flies and one bonus fruit. The increased budget pays for connected maze generation, corridor pathfinding and native DOM presentation. Tests and Vite never ship in the package. See [shared performance notes](https://github.com/coded-dot-design/dom-virus/blob/main/PERFORMANCE.md) and [reference study](https://github.com/coded-dot-design/dom-virus/blob/main/REFERENCES.md).
 
 ## First-cut support
 
@@ -142,3 +142,5 @@ MIT © 2026 Chris Cooley. Original character artwork is procedural and included 
 After checks pass on `main`, CI creates the tag matching `package.json` (for example `v0.2.0`) if it does not already exist. Existing tags never move. Bump the package version for the next release.
 
 Target beacons now attach to their actual elements. Native layout handles their scrolling, clipping and transforms. Mobile uses stationary rings and stable fills. See the [shared DOM ownership design](https://github.com/coded-dot-design/dom-virus/blob/main/docs/dom-ownership.md).
+
+Frog and fly artwork is owned by `src/art.ts`; builds generate `site/art.json` for the website. The frog combines separate body/mouth, eyes and feet. Its four-frame run advances only on actual movement, with an independent food-triggered chomp. Fly wings use stable individual phases. Reduced motion disables bobbing, foot loops and wing flaps.
