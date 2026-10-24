@@ -36,8 +36,8 @@ test("desktop, mobile and ultrawide mazes keep every pellet reachable and clear 
       ];
       const m = makeMaze(width, height, walls, rng(seed));
       assert.ok(m.cells.length >= 4);
-      assert.ok(m.cells.length <= 180);
-      assert.ok(m.pellets.length <= 280);
+      assert.ok(m.cells.length <= 952);
+      assert.ok(m.pellets.length <= 420);
       assert.ok([...distances(m, m.start)].every((d) => d >= 0));
       assert.ok(m.pellets.filter((p) => p.power).length >= 6);
       assert.ok(m.pellets.filter((p) => p.power).length <= 8);
@@ -111,7 +111,7 @@ test("text, pellets and the full soft corridor width never overlap", () => {
       bottom: 108 + i * 30,
     });
   const m = makeMaze(900, 650, [], rng(8), text);
-  assert.ok(m.pellets.length < 160, `sparse food: ${m.pellets.length}`);
+  assert.ok(m.pellets.length <= 420, `bounded food: ${m.pellets.length}`);
   assert.ok([...distances(m, m.start)].every((d) => d >= 0));
   for (const a of m.cells)
     for (const id of a.exits)
@@ -193,5 +193,16 @@ test("narrow mobile gutters retain a useful route for every starting branch", ()
           blocked(a, m.cells[id], [...walls, ...text], m.clearance),
           false,
         );
+  }
+});
+
+// Recorded 0.8.0 route lengths for this unchanged obstacle fixture: 1400/2874/5584 px.
+// Require broader navigable coverage, not merely more closely packed food.
+test("expanded maze more than doubles whitespace route coverage", () => {
+  for (const [width,height,previous] of [[390,844,1400],[1200,900,2874],[2500,1400,5584]]) {
+    const m=makeMaze(width,height,[{left:width*.3,right:width*.6,top:height*.3,bottom:height*.5}],()=>.4);
+    const length=m.cells.reduce((sum,a)=>sum+a.exits.filter(id=>id>a.id).reduce((n,id)=>n+Math.hypot(a.x-m.cells[id].x,a.y-m.cells[id].y),0),0);
+    assert.ok(length>=previous*2, `${width}: ${length}`);
+    assert.ok(m.pellets.length<=420);
   }
 });

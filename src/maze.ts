@@ -113,8 +113,7 @@ export function makeMaze(
   const obstacles = [...walls, ...text];
   const bound = (n: number, limit: number) =>
     Math.max(inset, Math.min(limit - inset, n));
-  // Keep a handful of real line runs, not a viewport-filling maze. Widely spaced
-  // anchors reduce clutter while retaining the shape of columns and paragraphs.
+  // Content-adjacent runs seed the maze; safe whitespace branches expand it below.
   const lines = text
     .filter(
       (r) =>
@@ -201,6 +200,10 @@ export function makeMaze(
       inset,
       width - inset,
       ...obstacles.flatMap((r) => [r.left - 22, r.right + 22]),
+      ...Array.from(
+        { length: Math.floor(width / 110) },
+        (_, i) => (i + 0.5) * 110,
+      ),
     ],
     width,
     28,
@@ -211,6 +214,10 @@ export function makeMaze(
       inset,
       height - inset,
       ...obstacles.flatMap((r) => [r.top - 22, r.bottom + 22]),
+      ...Array.from(
+        { length: Math.floor(height / 110) },
+        (_, i) => (i + 0.5) * 110,
+      ),
     ],
     height,
     34,
@@ -297,8 +304,13 @@ export function makeMaze(
     }
   }
   const edges = new Set<string>();
-  const connect = (a: number, b: number) =>
-    edges.add(a < b ? `${a},${b}` : `${b},${a}`);
+  let routeLength = 0;
+  const connect = (a: number, b: number) => {
+    const key = a < b ? `${a},${b}` : `${b},${a}`;
+    if (edges.has(key)) return;
+    edges.add(key);
+    routeLength += Math.hypot(grid[a]!.x - grid[b]!.x, grid[a]!.y - grid[b]!.y);
+  };
   const route = (id: number) => {
     while (previous[id]! >= 0) {
       connect(id, previous[id]!);
@@ -329,23 +341,97 @@ export function makeMaze(
       }
     }
   }
-  const trailLength = [...edges].reduce((sum, key) => {
-    const [a, b] = key.split(",").map(Number);
-    return (
-      sum + Math.hypot(grid[a!]!.x - grid[b!]!.x, grid[a!]!.y - grid[b!]!.y)
-    );
-  }, 0);
   // A group of nearby anchors can collapse to a tiny stub. Extend along the
   // same safe component instead of leaving a few power squares as the level.
   if (
     !edges.size ||
-    (height >= 100 && trailLength < Math.min(650, (width + height) * 0.6))
+    (height >= 100 && routeLength < Math.min(650, (width + height) * 0.6))
   ) {
     const end = connected.reduce(
       (best, id) => (costs[id]! > costs[best]! ? id : best),
       root,
     );
     route(end);
+  }
+  // Grow through unused whitespace, prioritizing distant branches before short
+  // alternate routes. All additions use the same collision-checked graph.
+  // The work/food budgets remain finite even on very large pages.
+  const lengthOf = (a: number, b: number) =>
+    Math.hypot(grid[a]!.x - grid[b]!.x, grid[a]!.y - grid[b]!.y);
+  const target =
+    height < 100
+      ? routeLength
+      : Math.min(12500, Math.max(routeLength * 2.2, (width * height) / 105));
+  const usedNodes = new Set<number>();
+  const separationByNode = new Float64Array(grid.length).fill(Infinity);
+  // Each newly selected node updates nearest-distance scores once, instead of
+  // rescanning every prior node on each branch selection.
+  const refresh = () => {
+    for (const key of edges)
+      for (const value of key.split(",")) {
+        const id = Number(value);
+        if (usedNodes.has(id)) continue;
+        usedNodes.add(id);
+        for (const candidate of connected)
+          separationByNode[candidate] = Math.min(
+            separationByNode[candidate]!,
+            lengthOf(candidate, id),
+          );
+      }
+  };
+  refresh();
+  for (let pass = 0; pass < 48 && routeLength < target; pass++) {
+    let best = -1,
+      separation = -1;
+    for (const id of connected) {
+      if (usedNodes.has(id)) continue;
+      if (separationByNode[id]! > separation) {
+        best = id;
+        separation = separationByNode[id]!;
+      }
+    }
+    if (best < 0 || separation < radius * 2 + 12) break;
+    const before = edges.size;
+    route(best);
+    if (edges.size === before) break;
+    refresh();
+  }
+  // Close a few broad loops, so flies can pursue via alternate routes instead
+  // of every new branch being a dead end. Avoid tightly packed parallel rails.
+  let loops = 0;
+  for (const a of grid) {
+    if (!usedNodes.has(a.id)) continue;
+    for (const id of a.exits) {
+      if (
+        id < a.id ||
+        !usedNodes.has(id) ||
+        edges.has(`${a.id},${id}`) ||
+        loops >= (height < 100 ? 0 : 12)
+      )
+        continue;
+      const b = grid[id]!,
+        horizontal = a.y === b.y;
+      if (lengthOf(a.id, id) < radius * 2 + 12) continue;
+      const crowded = [...edges].some((key) => {
+        const [i, j] = key.split(",").map(Number),
+          c = grid[i!]!,
+          d = grid[j!]!;
+        return (
+          horizontal === (c.y === d.y) &&
+          (horizontal
+            ? Math.abs(a.y - c.y) < radius * 2 + 12 &&
+              Math.min(b.x, Math.max(c.x, d.x)) >
+                Math.max(a.x, Math.min(c.x, d.x))
+            : Math.abs(a.x - c.x) < radius * 2 + 12 &&
+              Math.min(b.y, Math.max(c.y, d.y)) >
+                Math.max(a.y, Math.min(c.y, d.y)))
+        );
+      });
+      if (!crowded) {
+        connect(a.id, id);
+        loops++;
+      }
+    }
   }
   const used = [
     ...new Set([...edges].flatMap((e) => e.split(",").map(Number))),
@@ -370,7 +456,7 @@ export function makeMaze(
   const food = (p: Point, cell: number) => {
     if (
       !blocked(p, p, obstacles, clearance) &&
-      maze.pellets.length < 280 &&
+      maze.pellets.length < 420 &&
       !maze.pellets.some((q) => Math.hypot(p.x - q.x, p.y - q.y) < 17)
     )
       maze.pellets.push({
@@ -402,7 +488,7 @@ export function makeMaze(
           );
       }
   }
-  // Spread generous power food across the compact trails, away from the spawn.
+  // Spread generous power food across the expanded trails, away from the spawn.
   const powers: Pellet[] = [];
   for (
     let i = 0;

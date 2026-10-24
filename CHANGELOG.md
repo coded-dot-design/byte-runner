@@ -1,5 +1,9 @@
 # 0.3.1
 
+## 0.9.0
+
+Expand safe whitespace mazes with additional branches and loops. Add synthesized eating, power, pursuit and level cues; adopt the shared scoreboard controls.
+
 ## 0.5.0
 
 - Remove the dark background from native 0/1 highlights while retaining their game color.

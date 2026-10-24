@@ -5,14 +5,15 @@
   "name": "Byte Runner",
   "kind": "DOM CHASE",
   "tagline": "Follow the bites. Eat the page.",
-  "description": "A round, hungry pixel frog follows soft food trails through the page’s whitespace. Drift onto the pellet lines, roam off them to eat real text, and chase flies that stay on the trails.",
+  "description": "A round, hungry pixel frog explores a larger maze of food trails through the page’s whitespace. Roam off the soft edges to eat real text and chase flies that stay on the trails.",
   "accent": "lime",
   "icon": "runner",
   "versionNote": "Food trails. Tiny feet. A very real page.",
   "controls": [
     "Arrows / WASD / touch D-pad — move through the page",
     "Follow the food or leave the trail to eat page text",
-    "P — pause · G — next area · Esc — Recall"
+    "P — pause · G — next area · Esc — Recall",
+    "Scoreboard: sound · pause / resume · minimize · Recall"
   ],
   "facts": [
     {
