@@ -60,5 +60,42 @@
     "src/simulation.ts",
     "src/rules.ts",
     "shared/ORIGIN.json"
+  ],
+  "characters": [
+    {
+      "icon": "runner",
+      "name": "Byte Runner",
+      "role": "You",
+      "rules": "Move with arrows or the touch D-pad. Eat letters into real 0s and 1s. Every sixth letter drops a power orb.",
+      "color": ""
+    },
+    {
+      "icon": "ghost",
+      "name": "Chaser",
+      "role": "Direct pursuit",
+      "rules": "The violet ghost heads toward your current position. Without power, contact costs a life.",
+      "color": "#b491ff"
+    },
+    {
+      "icon": "ghost",
+      "name": "Interceptor",
+      "role": "Predictive pursuit",
+      "rules": "The pink ghost aims ahead of your heading. Turn to change its interception point.",
+      "color": "#ff9fba"
+    },
+    {
+      "icon": "ghost",
+      "name": "Sprinter",
+      "role": "Fast pursuit",
+      "rules": "The cyan ghost follows directly at a higher speed. All ghosts speed up as waves rise.",
+      "color": "#7de2da"
+    },
+    {
+      "icon": "ghost",
+      "name": "Vulnerable ghosts",
+      "role": "Power window",
+      "rules": "Eat an orb or fruit to seal the gates temporarily. Ghosts turn blue, flee and become edible. Chain catches for increasing points.",
+      "color": "#70a9ef"
+    }
   ]
 }
