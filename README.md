@@ -27,7 +27,7 @@ The page defaults to your system color scheme, with persistent light/dark overri
 
 **The page is the game board.** A small, independent MIT-licensed DOM arcade game in the DOM VIRUS collection.
 
-Food trails follow real UI whitespace and gutters, with small pixel squares, larger glowing power squares, and fruit. The round green frog can leave the trails to eat real page letters; only explicitly marked walls and controls block it. Clear food for a 500 × level bonus. Power makes flies edible for six seconds (stacking to nine). Three lives, three initial flies, up to eight on later levels.
+Food trails follow real UI whitespace and gutters, with small pixel squares, larger glowing power squares, and fruit. The round green frog can leave the trails to eat real page letters; only explicitly marked walls and controls block it. Clear food for a 500 × level bonus. Power makes flies edible for six seconds (stacking to nine). Three lives. Three flies arrive immediately, building to six on the first level and up to twelve later.
 
 ## Run locally
 
@@ -113,7 +113,7 @@ Set `playing` from a user action. The adapter mounts only in an effect, destroys
 
 ## Controls
 
-Arrows/WASD or the touch D-pad: choose a direction. The runner keeps moving along the corridor, queues turns until the next valid junction and reverses immediately. The last pressed direction wins. Eat all small and glowing pellets to clear a level. Fruit is optional bonus food, not a power-up.
+Arrows/WASD or the touch D-pad: choose a direction. The frog moves freely while a direction is held, with the last pressed direction winning. Flies stay on the trails. Eat each small and glowing pellet once to clear a level. Eaten food leaves a grey trail and returns after 12 seconds (20 for power); returning food scores without resetting level progress. Real letters do not regenerate. Fruit is optional bonus food, not a power-up.
 
 **P** pauses/resumes. **G** jumps to a gate. **Escape** or **Recall** exits and restores the page. The HUD can be folded. Focusing a form field pauses play; modifier shortcuts and typing are not captured. Theme follows the system unless overridden. Reduced-motion preference removes particles and decorative pulses.
 
@@ -129,7 +129,7 @@ npm run playground:build
 
 `src/simulation.ts` owns gameplay, `src/maze.ts` owns connected corridor generation and movement, and `src/presentation.ts` owns native SVG sprites and food. `src/rules.ts` owns balance constants. `src/index.ts` exposes the factory. The engine, shared entity pools, factory selection and React lifecycle adapter are maintained once in DOM VIRUS. All engine and game implementation sources use strict TypeScript. Generated declarations preserve game-specific snapshot fields and ship with the package; the browser receives plain JavaScript. This repository includes a generated, versioned `shared/core.js` snapshot with its source fingerprint in `shared/ORIGIN.json`; do not edit that generated file. Builds use the snapshot, so this repo works independently. A sibling `dom-virus` checkout enables live source iteration in Vite. To refresh the engine snapshot, run `npm run sync:games` in that checkout, then rebuild this game. A game build never silently replaces its pinned snapshot. A runtime update never silently changes a released game.
 
-The regular distribution is budgeted below **24 KB gzip including its runtime**. Runtime entities and geometry work are capped: at most 300 maze cells, fewer than 2,000 static food nodes, eight flies and one bonus fruit. The increased budget pays for connected maze generation, corridor pathfinding and native DOM presentation. Tests and Vite never ship in the package. See [shared performance notes](https://github.com/coded-dot-design/dom-virus/blob/main/PERFORMANCE.md) and [reference study](https://github.com/coded-dot-design/dom-virus/blob/main/REFERENCES.md).
+The regular distribution is budgeted below **24 KB gzip including its runtime**. Runtime entities and geometry work are capped: at most 672 routing candidates during layout, 280 reusable food nodes, twelve flies and one bonus fruit. Only selected text runs and their gutter connections become playable trails. The increased budget pays for connected maze generation, corridor pathfinding and native DOM presentation. Tests and Vite never ship in the package. See [shared performance notes](https://github.com/coded-dot-design/dom-virus/blob/main/PERFORMANCE.md) and [reference study](https://github.com/coded-dot-design/dom-virus/blob/main/REFERENCES.md).
 
 ## First-cut support
 
@@ -143,4 +143,4 @@ After checks pass on `main`, CI creates the tag matching `package.json` (for exa
 
 Target beacons now attach to their actual elements. Native layout handles their scrolling, clipping and transforms. Mobile uses stationary rings and stable fills. See the [shared DOM ownership design](https://github.com/coded-dot-design/dom-virus/blob/main/docs/dom-ownership.md).
 
-Frog and fly artwork is owned by `src/art.ts`; builds generate `site/art.json` for the website. The frog combines separate body/mouth, eyes and feet. Its four-frame run advances only on actual movement, with an independent food-triggered chomp. Fly wings use stable individual phases. Reduced motion disables bobbing, foot loops and wing flaps.
+Frog and fly artwork is owned by `src/art.ts`; builds generate `site/art.json` for the website. The frog combines separate body/mouth, eyes and feet. Its four-frame run advances only on actual movement, with a wider independent chomp while moving or eating. Characters have no outline or protection ring; protection uses a restrained opacity cue. Fly wings use stable individual phases. Reduced motion disables bobbing, foot loops and wing flaps.

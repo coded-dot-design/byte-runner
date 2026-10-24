@@ -9,19 +9,15 @@ export interface PixelArt {
 }
 export declare const FROG: {
     readonly body: "#3ecb74";
-    readonly edge: "#19774d";
     readonly power: "#8de45c";
-    readonly powerEdge: "#438c40";
     readonly eye: "#fff5d7";
     readonly pupil: "#152820";
 };
 export declare const FLY_COLORS: readonly ["#8573ee", "#f4457a", "#06c4ff"];
-export declare const FLY_EDGES: readonly ["#524486", "#973451", "#12677e"];
 export declare const CREAM = "#fff5d7", WING = "#d9f0f3";
 export type Facing = 0 | 1 | 2 | 3;
 export declare const FROG_BODIES: {
     body: string;
-    rim: string;
 }[][];
 export declare const FROG_EYES: {
     readonly side: {
@@ -35,7 +31,7 @@ export declare const FROG_EYES: {
         readonly pupils: "M7 3h2v3H7ZM17 3h2v3h-2Z";
     };
 };
-export declare const FROG_FEET: readonly ["M4 20h4v2h1v2H2v-2h2ZM17 20h4v2h2v2h-7v-2h1Z", "M3 20h4v2h2v2H2v-1H1v-2h2ZM18 20h4v2h2v1h-6Z", "M4 20h4v2h2v1H3v-1h1ZM17 20h4v2h2v2h-7v-1h-1v-2h2Z", "M5 20h4v2h2v1H4v-1h1ZM16 20h4v2h1v2h-7v-2h2Z", "M3 20h4v2h2v1H2v-1h1ZM18 20h4v2h2v2h-7v-2h1Z"];
+export declare const FROG_FEET: readonly ["M4 23h4v2h1v2H2v-2h2ZM17 23h4v2h2v2h-7v-2h1Z", "M3 23h4v2h2v2H2v-1H1v-2h2ZM18 23h4v2h2v1h-6Z", "M4 23h4v2h2v1H3v-1h1ZM17 23h4v2h2v2h-7v-1h-1v-2h2Z", "M5 23h4v2h2v1H4v-1h1ZM16 23h4v2h1v2h-7v-2h2Z", "M3 23h4v2h2v1H2v-1h1ZM18 23h4v2h2v2h-7v-2h1Z"];
 export declare const FLY_BODY = "M9 5h8v1h3v2h2v9h-1v2h-3v1h-2v-2h-3v2h-3v-2H7v-2H6v-5h1V8h2Z";
 export declare const FLY_EYES = "M10 8h4v6h-4V13H9V9h1ZM17 8h4v1h1v5h-5Z";
 export declare const FLY_PUPILS = "M12 9h2v4h-2ZM20 9h2v4h-2Z";

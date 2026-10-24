@@ -20,6 +20,8 @@ export interface Pellet extends Point {
   cell: number;
   power: boolean;
   eaten: boolean;
+  cleared: boolean;
+  respawnAt: number;
 }
 export interface Maze {
   cells: Cell[];
@@ -91,205 +93,264 @@ export function makeMaze(
   random: () => number,
   text: readonly Wall[] = [],
 ): Maze {
-  if (width < 32 || height < 32)
-    return { cells: [], pellets: [], step: 44, start: 0, path: "" };
-  // Never create an unbounded DOM grid on ultrawide screens.
-  const step = Math.max(44, Math.ceil(Math.sqrt((width * height) / 260)));
-  const cols = Math.max(1, Math.floor(width / step)),
-    rows = Math.max(1, Math.floor(height / step));
-  const ox = (width - (cols - 1) * step) / 2,
-    oy = (height - (rows - 1) * step) / 2;
-  // Snap the sampling axes toward actual line gaps and element gutters.
-  const axes = (
-    count: number,
-    origin: number,
-    limit: number,
-    candidates: number[],
-  ) => {
-    const result: number[] = [];
-    for (let i = 0; i < count; i++) {
-      const raw = origin + i * step;
-      const choices = candidates.filter(
-        (n) =>
-          n >= 15 &&
-          n <= limit - 15 &&
-          Math.abs(n - raw) <= step * 0.4 &&
-          (!result.length || n - result[result.length - 1]! >= 28),
-      );
-      result.push(
-        choices.sort((a, b) => Math.abs(a - raw) - Math.abs(b - raw))[0] ?? raw,
-      );
-    }
-    return result;
-  };
-  const terrain = [...walls, ...text];
-  const xs = axes(
-    cols,
-    ox,
-    width,
-    terrain.flatMap((r) => [r.left - 16, r.right + 16]),
-  );
-  const ys = axes(
-    rows,
-    oy,
-    height,
-    terrain.flatMap((r) => [r.top - 9, r.bottom + 9]),
-  );
+  const empty = (): Maze => ({
+    cells: [],
+    pellets: [],
+    step: 64,
+    start: 0,
+    path: "",
+  });
+  if (width < 64 || height < 64) return empty();
+  const inset = 22;
+  const bound = (n: number, limit: number) =>
+    Math.max(inset, Math.min(limit - inset, n));
   const inText = (p: Point) =>
     text.some(
       (r) =>
-        p.x > r.left - 2 &&
-        p.x < r.right + 2 &&
-        p.y > r.top - 2 &&
-        p.y < r.bottom + 2,
+        p.x > r.left - 3 &&
+        p.x < r.right + 3 &&
+        p.y > r.top - 3 &&
+        p.y < r.bottom + 3,
     );
-  const crossing = (a: Point, b: Point) =>
-    text.filter((r) => blocked(a, b, [r], 2)).length;
+  const crossings = (a: Point, b: Point) =>
+    text.filter((r) => blocked(a, b, [r], 3)).length;
+  // Keep a handful of real line runs, not a viewport-filling maze. Widely spaced
+  // anchors reduce clutter while retaining the shape of columns and paragraphs.
+  const lines = text
+    .filter(
+      (r) =>
+        r.right - r.left > 55 && r.bottom > inset && r.top < height - inset,
+    )
+    .sort((a, b) => a.top - b.top || a.left - b.left);
+  const initialLine = lines[Math.floor(random() * Math.min(3, lines.length))];
+  const selected: Wall[] = [];
+  const limit = Math.min(7, Math.max(3, Math.floor(height / 120)));
+  for (let i = 0; i < limit && lines.length; i++) {
+    let best = lines[0]!,
+      score = -1;
+    for (const r of lines) {
+      if (selected.includes(r)) continue;
+      const d = selected.length
+        ? Math.min(
+            ...selected.map(
+              (s) => Math.abs(r.top - s.top) + Math.abs(r.left - s.left) * 0.3,
+            ),
+          )
+        : r === initialLine
+          ? height + 1
+          : height - r.top;
+      if (d > score) {
+        best = r;
+        score = d;
+      }
+    }
+    if (selected.length && score < 64) break;
+    selected.push(best);
+  }
+  selected.sort((a, b) => a.top - b.top);
+  const runs: [Point, Point][] = [];
+  for (const [i, r] of selected.entries()) {
+    const left = bound(r.left - 20, width),
+      right = bound(r.right + 20, width);
+    const candidates = [bound(r.bottom + 8, height), bound(r.top - 8, height)];
+    candidates.sort(
+      (a, b) =>
+        crossings({ x: left, y: a }, { x: right, y: a }) -
+        crossings({ x: left, y: b }, { x: right, y: b }),
+    );
+    runs.push([
+      { x: left, y: candidates[0]! },
+      { x: right, y: candidates[0]! },
+    ]);
+    // Short bites follow real text baselines. Letters replace food here; they
+    // are mutated by the board and never synthesized or regenerated as pellets.
+    if (i % 3 === 1) {
+      const y = bound((r.top + r.bottom) / 2, height);
+      runs.push([
+        { x: left, y },
+        { x: right, y },
+      ]);
+    }
+  }
+  if (!runs.length) {
+    // Empty pages still get three compact, readable trails with open space around them.
+    for (const f of height < 160 ? [0.5] : [0.3, 0.5, 0.7])
+      runs.push([
+        { x: bound(width * 0.2, width), y: bound(height * f, height) },
+        { x: bound(width * 0.8, width), y: bound(height * f, height) },
+      ]);
+  }
+  const axis = (
+    values: number[],
+    extras: number[],
+    size: number,
+    cap: number,
+  ) => {
+    const result = [...new Set(values.map((n) => Math.round(n)))];
+    for (const n of extras) {
+      const v = Math.round(bound(n, size));
+      if (result.length < cap && result.every((x) => Math.abs(x - v) >= 18))
+        result.push(v);
+    }
+    return result.sort((a, b) => a - b);
+  };
+  const points = runs.flat();
+  const xs = axis(
+    points.map((p) => p.x),
+    [
+      inset,
+      width - inset,
+      ...walls.flatMap((r) => [r.left - 20, r.right + 20]),
+    ],
+    width,
+    24,
+  );
+  const ys = axis(
+    points.map((p) => p.y),
+    [
+      inset,
+      height - inset,
+      ...walls.flatMap((r) => [r.top - 20, r.bottom + 20]),
+    ],
+    height,
+    28,
+  );
   const grid: Cell[] = [],
     map = new Map<number, Cell>();
-  for (let row = 0; row < rows; row++)
-    for (let col = 0; col < cols; col++) {
-      const cell: Cell = {
-        id: grid.length,
-        row,
-        col,
-        x: xs[col]!,
-        y: ys[row]!,
-        exits: [],
-      };
-      if (!blocked(cell, cell, walls) && !inText(cell)) {
+  for (const [row, y] of ys.entries())
+    for (const [col, x] of xs.entries()) {
+      const cell: Cell = { id: grid.length, row, col, x, y, exits: [] };
+      if (!blocked(cell, cell, walls)) {
         grid.push(cell);
-        map.set(row * cols + col, cell);
+        map.set(row * xs.length + col, cell);
       }
     }
   for (const cell of grid)
-    for (const [dx, dy] of DIRECTIONS) {
-      // A short bridge can cross text where a continuous gutter is unavailable.
-      for (let gap = 1; gap <= 3; gap++) {
-        const col = cell.col + dx * gap,
-          row = cell.row + dy * gap;
-        if (col < 0 || col >= cols || row < 0 || row >= rows) break;
-        const next = map.get(row * cols + col);
-        if (!next) continue;
-        if (!blocked(cell, next, walls)) cell.exits.push(next.id);
-        break;
+    for (const [dx, dy] of [
+      [1, 0],
+      [0, 1],
+    ]) {
+      const next = map.get((cell.row + dy!) * xs.length + cell.col + dx!);
+      if (
+        next &&
+        (dx ? next.row === cell.row : next.col === cell.col) &&
+        !blocked(cell, next, walls)
+      ) {
+        cell.exits.push(next.id);
+        next.exits.push(cell.id);
       }
     }
-  // Only the largest connected component is playable: no stranded food.
-  const seen = new Set<number>();
-  let component: number[] = [];
-  for (const cell of grid) {
-    if (seen.has(cell.id)) continue;
-    const queue = [cell.id];
-    seen.add(cell.id);
-    for (let i = 0; i < queue.length; i++)
-      for (const id of grid[queue[i]!]!.exits)
-        if (!seen.has(id)) {
-          seen.add(id);
-          queue.push(id);
-        }
-    if (queue.length > component.length) component = queue;
+  if (!grid.length) return empty();
+  // A shortest-path tree joins selected food runs through the cheapest gutters.
+  // Candidate graph size is bounded (24 × 28); only the chosen routes survive.
+  const full: Maze = { ...empty(), cells: grid };
+  const anchors = runs.map(
+    ([a, b]) => [closest(full, a), closest(full, b)] as const,
+  );
+  const root = anchors[0]![0];
+  const costs = new Float64Array(grid.length).fill(Infinity),
+    previous = new Int16Array(grid.length).fill(-1),
+    done = new Set<number>();
+  costs[root] = 0;
+  for (let n = 0; n < grid.length; n++) {
+    let id = -1,
+      best = Infinity;
+    for (let i = 0; i < grid.length; i++)
+      if (!done.has(i) && costs[i]! < best) {
+        id = i;
+        best = costs[i]!;
+      }
+    if (id < 0) break;
+    done.add(id);
+    const a = grid[id]!;
+    for (const next of a.exits) {
+      const b = grid[next]!,
+        length = Math.hypot(a.x - b.x, a.y - b.y);
+      const cost = best + length + crossings(a, b) * (a.x === b.x ? 320 : 100);
+      if (cost < costs[next]!) {
+        costs[next] = cost;
+        previous[next] = id;
+      }
+    }
   }
-  const ids = new Map(component.map((id, i) => [id, i]));
-  const cells = component.map((id, i) => ({
+  const edges = new Set<string>();
+  const connect = (a: number, b: number) =>
+    edges.add(a < b ? `${a},${b}` : `${b},${a}`);
+  const route = (id: number) => {
+    while (previous[id]! >= 0) {
+      connect(id, previous[id]!);
+      id = previous[id]!;
+    }
+  };
+  for (const pair of anchors) {
+    const [a, b] = Number.isFinite(costs[pair[0]]!)
+      ? pair
+      : ([pair[1], pair[0]] as const);
+    if (!Number.isFinite(costs[a]!)) continue;
+    route(a);
+    if (Number.isFinite(costs[b]!)) route(b);
+    // Retain each actual line run as an alternate route, including after food is eaten.
+    if (grid[a]!.row === grid[b]!.row) {
+      let current = a;
+      while (current !== b) {
+        const c = grid[current]!,
+          next = c.exits.find(
+            (id) =>
+              grid[id]!.row === c.row &&
+              Math.sign(grid[id]!.x - c.x) === Math.sign(grid[b]!.x - c.x),
+          );
+        if (next === undefined || !Number.isFinite(costs[next]!)) break;
+        connect(current, next);
+        route(next);
+        current = next;
+      }
+    }
+  }
+  const used = [
+    ...new Set([...edges].flatMap((e) => e.split(",").map(Number))),
+  ];
+  const ids = new Map(used.map((id, i) => [id, i]));
+  const cells = used.map((id, i) => ({
     ...grid[id]!,
     id: i,
     exits: [] as number[],
   }));
-  const neighbors = component.map((id) =>
-    grid[id]!.exits.map((id) => ids.get(id)!).filter((id) => id !== undefined),
-  );
-  const maze: Maze = { cells, pellets: [], step, start: 0, path: "" };
-  if (!cells.length) return maze;
-  maze.start = closest(maze, { x: width * 0.35, y: height * 0.55 });
-  const visited = new Set([maze.start]),
-    stack = [maze.start];
-  const connect = (a: number, b: number) => {
+  for (const edge of edges) {
+    const [a, b] = edge.split(",").map((id) => ids.get(Number(id))!) as [
+      number,
+      number,
+    ];
     cells[a]!.exits.push(b);
     cells[b]!.exits.push(a);
-  };
-  while (stack.length) {
-    const id = stack[stack.length - 1]!,
-      choices = neighbors[id]!.filter((id) => !visited.has(id));
-    if (!choices.length) {
-      stack.pop();
-      continue;
-    }
-    choices.sort(
-      (a, b) =>
-        crossing(cells[id]!, cells[a]!) - crossing(cells[id]!, cells[b]!),
-    );
-    const best = crossing(cells[id]!, cells[choices[0]!]!);
-    const preferred = choices.filter(
-      (next) => crossing(cells[id]!, cells[next]!) === best,
-    );
-    const next =
-      preferred[
-        Math.min(preferred.length - 1, Math.floor(random() * preferred.length))
-      ]!;
-    connect(id, next);
-    visited.add(next);
-    stack.push(next);
   }
-  // Braided loops provide escape routes and let a queued turn pay off.
-  for (const cell of cells)
-    for (const id of neighbors[cell.id]!)
-      if (
-        id > cell.id &&
-        !cell.exits.includes(id) &&
-        crossing(cell, cells[id]!) === 0 &&
-        (cell.exits.length === 1 || random() < 0.18)
-      )
-        connect(cell.id, id);
-  const starts = cells.filter((c) => c.exits.some((id) => cells[id]!.x > c.x));
-  if (starts.length)
-    maze.start = starts.sort(
-      (a, b) =>
-        Math.hypot(a.x - width * 0.35, a.y - height * 0.55) -
-        Math.hypot(b.x - width * 0.35, b.y - height * 0.55),
-    )[0]!.id;
-  const fromStart = distances(maze, maze.start),
-    powers = new Set<number>();
-  for (let i = 0; i < Math.min(4, Math.floor(cells.length / 8)); i++) {
-    const fields = [...powers].map((id) => distances(maze, id));
-    let best = maze.start,
-      score = -1;
-    for (const cell of cells) {
-      const d = Math.min(
-        fromStart[cell.id]!,
-        ...fields.map((field) => field[cell.id]!),
-      );
-      if (!powers.has(cell.id) && d > score) {
-        best = cell.id;
-        score = d;
-      }
-    }
-    powers.add(best);
-  }
-  const food = (point: Point, cell: number, power = false) => {
-    if (power || maze.pellets.length < 1500)
+  const maze: Maze = { ...empty(), cells };
+  if (!cells.length) return maze;
+  maze.start = closest(maze, { x: width * 0.35, y: height * 0.55 });
+  const food = (p: Point, cell: number) => {
+    if (
+      !inText(p) &&
+      maze.pellets.length < 280 &&
+      !maze.pellets.some((q) => Math.hypot(p.x - q.x, p.y - q.y) < 17)
+    )
       maze.pellets.push({
-        ...point,
+        ...p,
         id: maze.pellets.length,
         cell,
-        power,
+        power: false,
         eaten: false,
+        cleared: false,
+        respawnAt: 0,
       });
   };
   const paths: string[] = [];
   for (const cell of cells) {
-    if (cell.id !== maze.start) food(cell, cell.id, powers.has(cell.id));
+    if (cell.id !== maze.start) food(cell, cell.id);
     for (const id of cell.exits)
       if (id > cell.id) {
-        const next = cells[id]!;
+        const next = cells[id]!,
+          length = Math.hypot(next.x - cell.x, next.y - cell.y),
+          pieces = Math.max(1, Math.round(length / 27));
         paths.push(`M${cell.x},${cell.y}L${next.x},${next.y}`);
-        const pieces = Math.max(
-          2,
-          Math.min(
-            12,
-            Math.round(Math.hypot(next.x - cell.x, next.y - cell.y) / 20),
-          ),
-        );
         for (let p = 1; p < pieces; p++)
           food(
             {
@@ -300,6 +361,39 @@ export function makeMaze(
           );
       }
   }
+  // Spread generous power food across the compact trails, away from the spawn.
+  const powers: Pellet[] = [];
+  for (
+    let i = 0;
+    i <
+    Math.min(
+      8,
+      Math.max(6, Math.floor(maze.pellets.length / 24)),
+      maze.pellets.length,
+    );
+    i++
+  ) {
+    let best: Pellet | undefined,
+      score = -1;
+    for (const p of maze.pellets) {
+      if (p.power) continue;
+      const d = Math.min(
+        Math.hypot(p.x - cells[maze.start]!.x, p.y - cells[maze.start]!.y),
+        ...powers.map((q) => Math.hypot(p.x - q.x, p.y - q.y)),
+      );
+      if (d > score) {
+        best = p;
+        score = d;
+      }
+    }
+    if (best) {
+      best.power = true;
+      powers.push(best);
+    }
+  }
+  // A seed may choose an equivalent starting branch without rebuilding a full random maze.
+  const exits = cells[maze.start]!.exits;
+  if (exits.length > 1 && random() > 0.5) exits.reverse();
   maze.path = paths.join("");
   return maze;
 }

@@ -20,6 +20,8 @@ export interface Pellet extends Point {
     cell: number;
     power: boolean;
     eaten: boolean;
+    cleared: boolean;
+    respawnAt: number;
 }
 export interface Maze {
     cells: Cell[];

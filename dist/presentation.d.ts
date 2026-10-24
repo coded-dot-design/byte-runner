@@ -31,6 +31,7 @@ export declare function createPresentation(api: GameContext): {
     render: (player: Actor | null, enemies: readonly Fly[], power: number, shield: number, bonus: (Point & {
         kind: number;
     }) | null, animation: RunnerAnimation) => void;
+    refill(id: number): void;
     eat(id: number): void;
 };
 export {};

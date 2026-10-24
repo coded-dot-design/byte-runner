@@ -5,19 +5,19 @@
   "name": "Byte Runner",
   "kind": "DOM CHASE",
   "tagline": "Follow the bites. Eat the page.",
-  "description": "A hungry pixel frog scrambles through the webpage. Follow food trails between the UI, grab glowing power squares, chase flies, and eat real page text.",
+  "description": "A round, hungry pixel frog chomps through the webpage. Follow short food trails along text and gutters, grab glowing power squares, and chase a growing swarm of flies.",
   "accent": "lime",
   "icon": "runner",
   "versionNote": "Food trails. Tiny feet. A very real page.",
   "controls": [
-    "Arrows / WASD / touch D-pad \u2014 move through the page",
+    "Arrows / WASD / touch D-pad — move through the page",
     "Follow the food or leave the trail to eat page text",
-    "P \u2014 pause \u00b7 G \u2014 next area \u00b7 Esc \u2014 Recall"
+    "P — pause · G — next area · Esc — Recall"
   ],
   "facts": [
     {
-      "value": "4",
-      "label": "power pellets"
+      "value": "6–8",
+      "label": "power squares"
     },
     {
       "value": "3",
@@ -37,7 +37,7 @@
   "chapters": [
     {
       "title": "The UI is the terrain.",
-      "body": "Pixel food trails follow gaps between real text, buttons, and page elements. Leave a trail whenever you want to eat the page. Clear the small and glowing squares to advance; real letters are optional extra food and turn into actual 0s and 1s."
+      "body": "A few compact food trails follow real text lines and UI gutters. Pellets stay in whitespace; real letters supply the food on text runs. Leave the trails to explore and eat the page. Eat each square once to clear the level; returning food is a bonus."
     },
     {
       "title": "Big glow. Bigger appetite.",
@@ -45,17 +45,17 @@
     },
     {
       "title": "Small feet. Big appetite.",
-      "body": "The frog\u2019s feet scramble only while it moves, with a separate chomp when it eats. Violet flies pursue directly, pink flies anticipate your heading, and cyan Roamers mix pursuit with wandering. Flies follow the corridor graph; their wings never let them cross its walls."
+      "body": "A round, outline-free frog opens a wide chomp as it runs, with tiny scrambling feet that stop when you stop. Violet flies pursue directly, pink flies anticipate your heading, and cyan Roamers mix pursuit with wandering. All flies follow the same trails, even after the food is eaten."
     },
     {
       "title": "The DOM carries the trails.",
-      "body": "The trail layout, pellets, fruit, and pixel sprites are native SVG children attached inside your content root. They follow scrolling and transforms even while paused. The active trail layout adapts to a changed viewport while preserving progress; it never earns points or clears a level by resizing."
+      "body": "Eaten squares leave a faint grey trail. Regular food returns after 12 seconds and power food after 20, using the simulation clock and the same SVG nodes. Real text stays mutated until Recall. Trails and characters live inside the content root, so native scrolling and transforms carry them with the page."
     }
   ],
   "code": "const game = createByteRunner({\n  root: \"main\",\n  textSelector: \"h1, h2, p, li\",\n  targetSelector: \"[data-gate]\",\n  theme: \"system\",\n});\ngame.start();\n// Later: game.destroy();",
   "importLine": "import { createByteRunner } from \"@coded-design/byte-runner\";",
   "engine": "Shared TypeScript runtime",
-  "extra": "Three lives. Levels advance by clearing food. The roster grows from three flies toward a cap of eight. Recall removes the creatures and food and restores game-owned text edits.",
+  "extra": "Three lives. Eat every square once to clear a level. Three flies arrive immediately, building to six on the first level and up to twelve later. Recall removes the creatures and food and restores game-owned text edits.",
   "sourcePaths": [
     "src/art.ts",
     "src/maze.ts",
@@ -68,7 +68,7 @@
       "icon": "runner",
       "name": "Byte Runner",
       "role": "You",
-      "rules": "A round green frog with tiny scrambling feet. Follow the food, or roam off the trail and eat real page letters. Its mouth chomps independently while it runs.",
+      "rules": "A round green frog with a wide, rhythmic chomp and tiny scrambling feet. Follow the short food trails, or roam freely and eat real page letters.",
       "color": "#3ecb74"
     },
     {
@@ -103,7 +103,7 @@
       "icon": "power",
       "name": "Power pellet",
       "role": "Flip the chase",
-      "rules": "The large glowing pixel squares give six seconds of power, capped at nine when stacked. They count toward clearing the level.",
+      "rules": "Large glowing pink squares give six seconds of power, capped at nine when stacked. Six to eight are spread along the trails; eaten power squares return after 20 seconds as bonus food.",
       "color": "#f4457a"
     },
     {

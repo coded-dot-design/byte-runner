@@ -11,7 +11,6 @@ import {
   FLY_WINGS,
   FLY_FEET,
   FLY_COLORS,
-  FLY_EDGES,
   WING,
   CREAM,
 } from "./art.js";
@@ -67,13 +66,12 @@ export function createPresentation(api: GameContext) {
   let runner: SVGGElement,
     pose: SVGGElement,
     torso: SVGGElement,
-    rim: SVGPathElement,
     body: SVGPathElement,
     stems: SVGPathElement,
     cream: SVGPathElement,
     pupils: SVGPathElement,
     feet: SVGPathElement,
-    guard: SVGCircleElement,
+    foodLayer: SVGGElement,
     fruit: SVGGElement,
     flyLayer: SVGGElement;
   let pellets: SVGElement[] = [];
@@ -190,13 +188,16 @@ export function createPresentation(api: GameContext) {
     set(svg, "height", String(frame.height));
     set(svg, "viewBox", `0 0 ${frame.width || 1} ${frame.height || 1}`);
     // Only food and creatures are painted. The page supplies every surface.
-    svg.innerHTML =
-      '<g data-byte-food></g><g data-byte-fruit visibility="hidden" shape-rendering="crispEdges"></g><g data-byte-flies></g><g data-byte-runner><circle r="17" fill="none" stroke-width="2"/><g transform="translate(-12 -13)"><g data-byte-pose shape-rendering="crispEdges"><path data-byte-feet/><g data-byte-torso><path data-byte-rim/><path data-byte-body/><g data-byte-eyes><path data-stems/><path data-cream/><path data-pupils/></g></g></g></g></g>';
+    if (!runner)
+      svg.innerHTML =
+        '<g data-byte-food shape-rendering="crispEdges"></g><g data-byte-fruit visibility="hidden" shape-rendering="crispEdges"></g><g data-byte-flies></g><g data-byte-runner><g transform="scale(1.2) translate(-12 -15)"><g data-byte-pose shape-rendering="crispEdges"><path data-byte-feet/><g data-byte-torso><path data-byte-body/><g data-byte-eyes><path data-stems/><path data-cream/><path data-pupils/></g></g></g></g></g>';
     const dark =
       api.options.theme === "dark" ||
       (api.options.theme !== "light" &&
         doc.defaultView!.matchMedia("(prefers-color-scheme:dark)").matches);
-    const food = svg.querySelector("[data-byte-food]")!;
+    const food = (foodLayer =
+      svg.querySelector<SVGGElement>("[data-byte-food]")!);
+    food.replaceChildren();
     pellets = maze.pellets.map((p) => {
       const n = doc.createElementNS(NS, p.power ? "g" : "rect");
       n.setAttribute(
@@ -206,33 +207,33 @@ export function createPresentation(api: GameContext) {
       if (p.power) {
         n.setAttribute("transform", `translate(${p.x} ${p.y})`);
         n.innerHTML =
-          '<rect x="-11" y="-11" width="22" height="22" fill="#f4457a" opacity=".1"/><rect x="-8" y="-8" width="16" height="16" fill="#f4457a" opacity=".24"/><rect x="-5" y="-5" width="10" height="10" fill="#f4457a" stroke="#fff5d7" stroke-width="1.5"/>';
+          '<rect x="-14" y="-14" width="28" height="28" fill="#f4457a" opacity=".1"/><rect x="-10" y="-10" width="20" height="20" fill="#f4457a" opacity=".24"/><rect x="-7" y="-7" width="14" height="14" fill="#f4457a"/>';
       } else {
         n.setAttribute("x", String(p.x - 2));
         n.setAttribute("y", String(p.y - 2));
         n.setAttribute("width", "4");
         n.setAttribute("height", "4");
         n.setAttribute("fill", dark ? "#fff5d7" : "#6758bd");
-        n.setAttribute("stroke", dark ? "#222e56" : "#fff");
-        n.setAttribute("stroke-width", ".65");
       }
-      if (p.eaten) n.setAttribute("visibility", "hidden");
+      n.setAttribute(
+        "data-food-color",
+        p.power ? "#f4457a" : dark ? "#fff5d7" : "#6758bd",
+      );
+      n.setAttribute("data-eaten", String(p.eaten));
       food.append(n);
       return n;
     });
     runner = svg.querySelector("[data-byte-runner]")!;
     pose = svg.querySelector("[data-byte-pose]")!;
     torso = svg.querySelector("[data-byte-torso]")!;
-    rim = svg.querySelector("[data-byte-rim]")!;
     body = svg.querySelector("[data-byte-body]")!;
     feet = svg.querySelector("[data-byte-feet]")!;
     stems = svg.querySelector("[data-stems]")!;
     cream = svg.querySelector("[data-cream]")!;
     pupils = svg.querySelector("[data-pupils]")!;
-    guard = runner.querySelector("circle")!;
     fruit = svg.querySelector("[data-byte-fruit]")!;
     flyLayer = svg.querySelector("[data-byte-flies]")!;
-    flies.clear();
+    maze.pellets.forEach((p) => foodState(p.id, p.eaten));
   }
   const syncPosition = () => {
     const r = host.getBoundingClientRect();
@@ -273,10 +274,8 @@ export function createPresentation(api: GameContext) {
     );
     set(pose, "data-facing", String(facing));
     set(torso, "transform", `translate(0 ${f.bob})`);
-    set(rim, "d", pixels.rim);
     set(body, "d", pixels.body);
     set(body, "data-mouth", String(f.mouth));
-    set(rim, "fill", power ? FROG.powerEdge : FROG.edge);
     set(body, "fill", power ? FROG.power : FROG.body);
     set(stems, "fill", power ? FROG.power : FROG.body);
     set(stems, "d", eyes.stems);
@@ -292,8 +291,26 @@ export function createPresentation(api: GameContext) {
     set(feet, "d", FROG_FEET[f.step]!);
     set(feet, "fill", power ? FROG.power : FROG.body);
     set(feet, "data-frame", String(f.step));
-    set(guard, "visibility", power > 0 || shield > 0 ? "visible" : "hidden");
-    set(guard, "stroke", power > 0 ? "#f4457a" : "#8573ee");
+    set(runner, "data-protected", String(shield > 0));
+    set(
+      runner,
+      "opacity",
+      shield > 0
+        ? api.reducedMotion
+          ? ".8"
+          : Math.floor(api.time * 4) % 2
+            ? ".65"
+            : "1"
+        : "1",
+    );
+    // One quantized pulse for the entire food layer; no per-pellet animations.
+    set(
+      foodLayer,
+      "opacity",
+      api.reducedMotion
+        ? "1"
+        : ["1", ".85", ".7", ".85"][Math.floor(api.time * 2) % 4]!,
+    );
     const alive = new Set<number>();
     for (const g of enemies) {
       alive.add(g.id);
@@ -302,7 +319,7 @@ export function createPresentation(api: GameContext) {
         const n = doc.createElementNS(NS, "g");
         n.setAttribute("data-byte-fly", String(g.id));
         n.setAttribute("shape-rendering", "crispEdges");
-        n.innerHTML = `<path data-wings fill="${WING}" stroke="#445479" stroke-width=".6"/><path d="${FLY_FEET}" fill="#273148"/><path data-body d="${FLY_BODY}" stroke-width=".65"/><path d="${FLY_EYES}" fill="${CREAM}"/><path data-pupils d="${FLY_PUPILS}" fill="#152820"/>`;
+        n.innerHTML = `<path data-wings fill="${WING}"/><path d="${FLY_FEET}" fill="#273148"/><path data-body d="${FLY_BODY}"/><path d="${FLY_EYES}" fill="${CREAM}"/><path data-pupils d="${FLY_PUPILS}" fill="#152820"/>`;
         flyLayer.append(n);
         sprite = {
           node: n,
@@ -315,7 +332,7 @@ export function createPresentation(api: GameContext) {
       set(
         sprite.node,
         "transform",
-        `translate(${(g.x - 13).toFixed(2)} ${(g.y - 11).toFixed(2)})`,
+        `translate(${g.x.toFixed(2)} ${g.y.toFixed(2)}) scale(1.1) translate(-13 -11)`,
       );
       const flap = wingFrame(api.time, g.phase, api.reducedMotion);
       set(sprite.wing, "d", FLY_WINGS[flap]!);
@@ -329,11 +346,6 @@ export function createPresentation(api: GameContext) {
         sprite.body,
         "fill",
         power > 0 ? (warning ? "#86a8df" : "#628dce") : FLY_COLORS[g.kind % 3]!,
-      );
-      set(
-        sprite.body,
-        "stroke",
-        power > 0 ? "#394f78" : FLY_EDGES[g.kind % 3]!,
       );
       set(sprite.node, "data-vulnerable", String(power > 0));
       set(
@@ -360,6 +372,21 @@ export function createPresentation(api: GameContext) {
       }
     }
   }
+  function foodState(id: number, eaten: boolean) {
+    const node = pellets[id];
+    if (!node) return;
+    set(node, "data-eaten", String(eaten));
+    set(node, "opacity", eaten ? ".3" : "1");
+    if (node.tagName === "rect")
+      set(
+        node,
+        "fill",
+        eaten ? "#8c929d" : node.getAttribute("data-food-color")!,
+      );
+    else
+      for (const rect of node.children)
+        set(rect, "fill", eaten ? "#8c929d" : "#f4457a");
+  }
   return {
     measure,
     mount,
@@ -367,8 +394,11 @@ export function createPresentation(api: GameContext) {
     local,
     syncPosition,
     render,
+    refill(id: number) {
+      foodState(id, false);
+    },
     eat(id: number) {
-      pellets[id] && set(pellets[id]!, "visibility", "hidden");
+      foodState(id, true);
     },
   };
 }

@@ -27,10 +27,12 @@ export function runnerFrame(
   const step =
     state.moving && !reduced ? 1 + (Math.floor(state.runTime * 12) % 4) : 0;
   const mouth =
-    time < state.chompUntil
+    state.moving || time < state.chompUntil
       ? reduced
         ? 1
-        : [0, 1, 2, 1][Math.floor(time * 12) % 4]!
+        : [0, 1, 2, 1][
+            Math.floor((state.moving ? state.runTime : time) * 16) % 4
+          ]!
       : 0;
   return { step, mouth, bob: step && step % 2 === 0 ? -1 : 0 };
 }

@@ -9,59 +9,31 @@ export interface PixelArt {
 }
 export const FROG = {
   body: "#3ecb74",
-  edge: "#19774d",
   power: "#8de45c",
-  powerEdge: "#438c40",
   eye: "#fff5d7",
   pupil: "#152820",
 } as const;
 export const FLY_COLORS = ["#8573ee", "#f4457a", "#06c4ff"] as const;
-export const FLY_EDGES = ["#524486", "#973451", "#12677e"] as const;
 export const CREAM = "#fff5d7",
   WING = "#d9f0f3";
 export type Facing = 0 | 1 | 2 | 3;
-const bodyRows = [
-  [8, 20],
-  [6, 21],
-  [4, 22],
-  [3, 23],
-  [2, 24],
-  [1, 24],
-  [1, 24],
-  [0, 24],
-  [0, 24],
-  [0, 24],
-  [1, 24],
-  [1, 24],
-  [2, 23],
-  [3, 22],
-  [4, 21],
-  [6, 20],
-  [8, 18],
-] as const;
+// A 24 × 24 stepped disc: the mouth cuts the silhouette, never a dark outline.
 function mask(front: boolean, mouth: number, facing: Facing) {
   const cells = new Set<string>();
-  bodyRows.forEach(([left, right], row) => {
-    const width = right - left,
-      start = front ? Math.floor((24 - width) / 2) : left;
-    for (let x = start; x < start + width; x++) cells.add(`${x},${row + 4}`);
-  });
-  if (!front) {
-    const widths =
-      mouth === 2
-        ? [4, 7, 10, 12, 10, 7, 4]
-        : mouth === 1
-          ? [4, 7, 9, 7, 4]
-          : [9];
-    const top = mouth === 2 ? 9 : mouth === 1 ? 10 : 12;
-    widths.forEach((width, row) => {
-      for (let x = 24 - width; x < 24; x++) cells.delete(`${x},${top + row}`);
-    });
-  } else {
-    const top = facing === 3 ? 7 : 14,
-      height = mouth === 2 ? 5 : mouth === 1 ? 3 : 1;
-    for (let y = top; y < top + height; y++)
-      for (let x = 7; x < 18; x++) cells.delete(`${x},${y}`);
+  for (let y = 0; y < 24; y++)
+    for (let x = 0; x < 24; x++) {
+      const dx = x - 11.5,
+        dy = y - 11.5;
+      if (dx * dx + dy * dy <= 12 * 12) cells.add(`${x},${y + 3}`);
+    }
+  const slope = mouth === 2 ? 0.95 : mouth === 1 ? 0.48 : 0;
+  for (const key of cells) {
+    const [x, y] = key.split(",").map(Number) as [number, number];
+    // Front/back chomps open toward travel while eyes and feet stay upright.
+    const forward = front ? (facing === 3 ? 11 - y : y - 18) : x - 11.5;
+    const across = front ? Math.abs(x - 11.5) : Math.abs(y - 14.5);
+    if (forward > 0 && across <= Math.max(0.5, forward * slope))
+      cells.delete(key);
   }
   return cells;
 }
@@ -87,24 +59,10 @@ function path(cells: Set<string>) {
   }
   return result;
 }
-function expand(cells: Set<string>) {
-  const rim = new Set(cells);
-  for (const key of cells) {
-    const [x, y] = key.split(",").map(Number) as [number, number];
-    for (const [dx, dy] of [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ])
-      rim.add(`${x + dx!},${y + dy!}`);
-  }
-  return rim;
-}
 export const FROG_BODIES = Array.from({ length: 4 }, (_, facing) =>
   Array.from({ length: 3 }, (_, mouth) => {
     const pixels = mask(facing === 1 || facing === 3, mouth, facing as Facing);
-    return { body: path(pixels), rim: path(expand(pixels)) };
+    return { body: path(pixels) };
   }),
 );
 export const FROG_EYES = {
@@ -120,11 +78,11 @@ export const FROG_EYES = {
   },
 } as const;
 export const FROG_FEET = [
-  "M4 20h4v2h1v2H2v-2h2ZM17 20h4v2h2v2h-7v-2h1Z",
-  "M3 20h4v2h2v2H2v-1H1v-2h2ZM18 20h4v2h2v1h-6Z",
-  "M4 20h4v2h2v1H3v-1h1ZM17 20h4v2h2v2h-7v-1h-1v-2h2Z",
-  "M5 20h4v2h2v1H4v-1h1ZM16 20h4v2h1v2h-7v-2h2Z",
-  "M3 20h4v2h2v1H2v-1h1ZM18 20h4v2h2v2h-7v-2h1Z",
+  "M4 23h4v2h1v2H2v-2h2ZM17 23h4v2h2v2h-7v-2h1Z",
+  "M3 23h4v2h2v2H2v-1H1v-2h2ZM18 23h4v2h2v1h-6Z",
+  "M4 23h4v2h2v1H3v-1h1ZM17 23h4v2h2v2h-7v-1h-1v-2h2Z",
+  "M5 23h4v2h2v1H4v-1h1ZM16 23h4v2h1v2h-7v-2h2Z",
+  "M3 23h4v2h2v1H2v-1h1ZM18 23h4v2h2v2h-7v-2h1Z",
 ] as const;
 export const FLY_BODY =
   "M9 5h8v1h3v2h2v9h-1v2h-3v1h-2v-2h-3v2h-3v-2H7v-2H6v-5h1V8h2Z";
@@ -139,10 +97,9 @@ export function frogArt(mouth = 1, power = false): PixelArt {
   const body = FROG_BODIES[0]![mouth]!,
     eyes = FROG_EYES.side;
   return {
-    viewBox: "-2 -2 28 28",
+    viewBox: "-2 -1 28 29",
     layers: [
       { d: FROG_FEET[0], fill: power ? FROG.power : FROG.body },
-      { d: body.rim, fill: power ? FROG.powerEdge : FROG.edge },
       { d: body.body, fill: power ? FROG.power : FROG.body },
       { d: eyes.stems, fill: power ? FROG.power : FROG.body },
       { d: eyes.cream, fill: FROG.eye },

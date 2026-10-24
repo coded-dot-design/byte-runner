@@ -21,6 +21,7 @@ import type { Actor, Maze, Pellet, Point } from "./maze.js";
 import { createPresentation } from "./presentation.js";
 import type { Frame } from "./presentation.js";
 import { MAX_GHOSTS, extendPower } from "./rules.js";
+import { eatPellet, refillPellet, PELLET_RETURN_SECONDS } from "./food.js";
 import { createRunnerAnimation, moveAnimation } from "./animation.js";
 
 interface Ghost extends Actor {
@@ -66,11 +67,10 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
     combo = 0;
   let remaining = 0,
     collected = 0,
-    total = 0,
-    powerEaten = 0;
+    total = 0;
   let requested = -1,
     transition = 0,
-    spawnIn = 2.5,
+    spawnIn = 1.2,
     fruitIn = 14,
     fruitCount = 0;
   let geometryIn = 0,
@@ -83,6 +83,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
   const event = (type: string, data: Record<string, unknown> = {}) =>
     api.emit(type, data);
   function generate(preserve = false, nextFrame = view.measure()) {
+    const oldFood = maze?.pellets ?? [];
     const oldRemaining = remaining,
       oldTotal = maze?.pellets.length || 1;
     const oldPlayer =
@@ -101,7 +102,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
       nextFrame.text,
     );
     // A temporarily occluded root must not count as a cleared level.
-    if (nextMaze.cells.length < 2) {
+    if (nextMaze.cells.length < 2 || !nextMaze.pellets.length) {
       if (!maze) {
         maze = nextMaze;
         frame = nextFrame;
@@ -117,33 +118,40 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
         Math.round((maze.pellets.length * oldRemaining) / oldTotal),
       );
       // Spread remaining food evenly. A scroll/resize never scores or refills a level.
-      const powers = maze.pellets.filter((p) => p.power);
-      powers.slice(0, powerEaten).forEach((p) => {
-        p.eaten = true;
-      });
-      const ordinary = maze.pellets.filter((p) => !p.power);
-      const keep = Math.max(0, target - powers.filter((p) => !p.eaten).length);
-      ordinary.forEach((p, i) => {
-        p.eaten =
-          Math.floor(((i + 1) * keep) / ordinary.length) ===
-          Math.floor((i * keep) / ordinary.length);
+      const cleared = Math.max(0, maze.pellets.length - target);
+      const oldCleared = oldFood.filter((p) => p.cleared);
+      const oldEaten = oldCleared.filter((p) => p.eaten);
+      const eatenShare = oldEaten.length / Math.max(1, oldCleared.length);
+      const due = oldEaten.length
+        ? Math.min(...oldEaten.map((p) => p.respawnAt))
+        : api.time + PELLET_RETURN_SECONDS;
+      let count = 0;
+      maze.pellets.forEach((p, i) => {
+        p.cleared =
+          Math.floor(((i + 1) * cleared) / maze.pellets.length) !==
+          Math.floor((i * cleared) / maze.pellets.length);
+        if (p.cleared) {
+          p.eaten =
+            Math.floor((count + 1) * eatenShare) !==
+            Math.floor(count * eatenShare);
+          p.respawnAt = Math.max(api.time, due);
+          count++;
+        }
       });
     } else {
       collected = 0;
-      powerEaten = 0;
       fruitCount = 0;
       fruitIn = 14;
     }
-    remaining = maze.pellets.filter((p) => !p.eaten).length;
+    remaining = maze.pellets.filter((p) => !p.cleared).length;
     total = collected + remaining;
     food = new Map();
-    for (const p of maze.pellets)
-      if (!p.eaten) {
-        const key = bin(p);
-        const group = food.get(key) ?? [];
-        group.push(p);
-        food.set(key, group);
-      }
+    for (const p of maze.pellets) {
+      const key = bin(p);
+      const group = food.get(key) ?? [];
+      group.push(p);
+      food.set(key, group);
+    }
     player = actorAt(maze, maze.start);
     requested = -1;
     animation.moving = false;
@@ -153,7 +161,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
     }
     ghosts = [];
     fruit = null;
-    spawnIn = 2.5;
+    spawnIn = 1.2;
     shield = Math.max(shield, preserve ? 0.6 : 2);
     chaseIn = 0;
     if (preserve) {
@@ -182,6 +190,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
         direction: g.direction,
       });
     }
+    if (!preserve) for (let i = 0; i < 3; i++) spawnGhost();
     event(preserve ? "maze-reflow" : "level-start", {
       wave,
       pellets: remaining,
@@ -202,7 +211,6 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
     remaining = 0;
     collected = 0;
     total = 0;
-    powerEaten = 0;
     transition = 0;
     geometryIn = 0;
     pendingKey = "";
@@ -216,16 +224,17 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
     for (let dx = -1; dx <= 1; dx++)
       for (let dy = -1; dy <= 1; dy++)
         for (const p of food.get(`${x + dx},${y + dy}`) ?? []) {
-          if (p.eaten || Math.hypot(p.x - point.x, p.y - point.y) > 10)
+          if (p.eaten || Math.hypot(p.x - point.x, p.y - point.y) > 12)
             continue;
-          p.eaten = true;
+          const first = eatPellet(p, api.time);
           animation.chompUntil = api.time + 0.3;
-          remaining--;
-          collected++;
+          if (first) {
+            remaining--;
+            collected++;
+          }
           score += p.power ? 50 : 10;
           view.eat(p.id);
           if (p.power) {
-            powerEaten++;
             power = extendPower(power);
             sealDuration = power;
             combo = 0;
@@ -239,7 +248,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
     // Letters are optional bonus food along the actual corridor, never replaced sprites.
     const at = view.viewport(point);
     let consumed = 0;
-    for (const glyph of api.board.near(at.x, at.y, 9)) {
+    for (const glyph of api.board.near(at.x, at.y, 13)) {
       if (consumed >= 2) break;
       if (api.board.consume(glyph, "binary")) {
         animation.chompUntil = api.time + 0.3;
@@ -261,12 +270,16 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
   function spawnGhost() {
     if (
       !player ||
-      ghosts.length >= Math.min(MAX_GHOSTS, 3 + Math.floor((wave - 1) / 2))
+      ghosts.length >= Math.min(MAX_GHOSTS, 6 + Math.floor((wave - 1) / 2))
     )
       return;
     const field = distances(maze, player.to);
     const far = maze.cells.filter(
-      (c) => field[c.id]! >= Math.max(4, Math.max(...field) * 0.55),
+      (c) =>
+        field[c.id]! >= 2 &&
+        Math.hypot(c.x - player!.x, c.y - player!.y) >=
+          Math.min(220, Math.max(100, frame.width * 0.25)) &&
+        ghosts.every((g) => Math.hypot(c.x - g.x, c.y - g.y) > 40),
     );
     if (!far.length) return;
     const cell = far[Math.floor(api.random() * far.length)]!;
@@ -320,6 +333,9 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
       }
       return;
     }
+    // Refills reuse the same SVG nodes and graph. A pause also pauses their clock.
+    for (const p of maze.pellets)
+      if (refillPellet(p, api.time)) view.refill(p.id);
     shield = Math.max(0, shield - dt);
     const wasPowered = power > 0;
     power = Math.max(0, power - dt);
@@ -346,7 +362,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
             frame.height - 14,
           ),
         };
-        if (blocked(player, next, frame.solids, 12)) break;
+        if (blocked(player, next, frame.solids, 15)) break;
         player.x = next.x;
         player.y = next.y;
         collect(player);
@@ -391,7 +407,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
       spawnIn -= dt;
       if (spawnIn <= 0) {
         spawnGhost();
-        spawnIn = 2.2;
+        spawnIn = 1.15;
       }
     }
     // These are the actual gate buttons: their native fill reflects power time.
@@ -431,7 +447,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
             )[0];
         },
       );
-      if (Math.hypot(player.x - g.x, player.y - g.y) < 20) {
+      if (Math.hypot(player.x - g.x, player.y - g.y) < 23) {
         const at = view.viewport(g);
         if (power > 0) {
           animation.chompUntil = api.time + 0.3;
@@ -456,7 +472,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
           animation.chompUntil = 0;
           ghosts = [];
           shield = 2.5;
-          spawnIn = 2.5;
+          spawnIn = 1.2;
           break;
         }
       }
@@ -494,7 +510,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
           ? "Scroll to an open part of the page to find food trails"
           : transition > 0
             ? `LEVEL ${wave} CLEAR · Next trails incoming`
-            : `${remaining} PELLETS LEFT · ${power > 0 ? `POWER ${power.toFixed(1)}s · Hunt flies` : "Arrows / WASD · Follow the dots · Fruit = bonus"}`,
+            : `${remaining} PELLETS LEFT · ${power > 0 ? `POWER ${power.toFixed(1)}s · Hunt flies` : "Arrows / WASD · Follow the bites · Fruit = bonus"}`,
       };
     },
   };
