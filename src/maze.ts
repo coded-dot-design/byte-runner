@@ -1,4 +1,4 @@
-/** A connected, bounded corridor graph. Native page rectangles cut real walls. */
+/** Whitespace routes guide food and flies; their soft edges never fence in the frog. */
 export interface Point {
   x: number;
   y: number;
@@ -27,9 +27,13 @@ export interface Maze {
   cells: Cell[];
   pellets: Pellet[];
   step: number;
+  radius: number;
+  clearance: number;
   start: number;
   path: string;
 }
+export const TRAIL_RADIUS = 15;
+export const TRAIL_CLEARANCE = TRAIL_RADIUS + 3;
 export const DIRECTIONS = [
   [1, 0],
   [0, 1],
@@ -50,7 +54,7 @@ export function blocked(
   a: Point,
   b: Point,
   walls: readonly Wall[],
-  padding = 17,
+  padding = TRAIL_CLEARANCE,
 ) {
   return walls.some(
     (w) =>
@@ -93,27 +97,22 @@ export function makeMaze(
   random: () => number,
   text: readonly Wall[] = [],
 ): Maze {
+  const radius = width < 520 ? 7 : TRAIL_RADIUS,
+    clearance = radius + (width < 520 ? 2 : 3);
   const empty = (): Maze => ({
     cells: [],
     pellets: [],
     step: 64,
+    radius,
+    clearance,
     start: 0,
     path: "",
   });
   if (width < 64 || height < 64) return empty();
-  const inset = 22;
+  const inset = width < 520 ? 9 : 22;
+  const obstacles = [...walls, ...text];
   const bound = (n: number, limit: number) =>
     Math.max(inset, Math.min(limit - inset, n));
-  const inText = (p: Point) =>
-    text.some(
-      (r) =>
-        p.x > r.left - 3 &&
-        p.x < r.right + 3 &&
-        p.y > r.top - 3 &&
-        p.y < r.bottom + 3,
-    );
-  const crossings = (a: Point, b: Point) =>
-    text.filter((r) => blocked(a, b, [r], 3)).length;
   // Keep a handful of real line runs, not a viewport-filling maze. Widely spaced
   // anchors reduce clutter while retaining the shape of columns and paragraphs.
   const lines = text
@@ -124,7 +123,7 @@ export function makeMaze(
     .sort((a, b) => a.top - b.top || a.left - b.left);
   const initialLine = lines[Math.floor(random() * Math.min(3, lines.length))];
   const selected: Wall[] = [];
-  const limit = Math.min(7, Math.max(3, Math.floor(height / 120)));
+  const limit = Math.min(5, Math.max(3, Math.floor(height / 180)));
   for (let i = 0; i < limit && lines.length; i++) {
     let best = lines[0]!,
       score = -1;
@@ -149,27 +148,28 @@ export function makeMaze(
   }
   selected.sort((a, b) => a.top - b.top);
   const runs: [Point, Point][] = [];
-  for (const [i, r] of selected.entries()) {
-    const left = bound(r.left - 20, width),
-      right = bound(r.right + 20, width);
-    const candidates = [bound(r.bottom + 8, height), bound(r.top - 8, height)];
-    candidates.sort(
-      (a, b) =>
-        crossings({ x: left, y: a }, { x: right, y: a }) -
-        crossings({ x: left, y: b }, { x: right, y: b }),
+  for (const r of selected) {
+    const left = bound(r.left - 22, width),
+      right = bound(r.right + 22, width);
+    const candidates = [
+      bound(r.bottom + 22, height),
+      bound(r.top - 22, height),
+    ];
+    const y = candidates.find(
+      (y) => !blocked({ x: left, y }, { x: right, y }, obstacles, clearance),
     );
-    runs.push([
-      { x: left, y: candidates[0]! },
-      { x: right, y: candidates[0]! },
-    ]);
-    // Short bites follow real text baselines. Letters replace food here; they
-    // are mutated by the board and never synthesized or regenerated as pellets.
-    if (i % 3 === 1) {
-      const y = bound((r.top + r.bottom) / 2, height);
+    if (y !== undefined)
       runs.push([
         { x: left, y },
         { x: right, y },
       ]);
+    else {
+      // Dense paragraphs have no usable interline space: follow their side gutters.
+      for (const x of [left, right]) {
+        const a = { x, y: bound(r.top - 22, height) },
+          b = { x, y: bound(r.bottom + 22, height) };
+        if (!blocked(a, b, obstacles, clearance)) runs.push([a, b]);
+      }
     }
   }
   if (!runs.length) {
@@ -200,27 +200,27 @@ export function makeMaze(
     [
       inset,
       width - inset,
-      ...walls.flatMap((r) => [r.left - 20, r.right + 20]),
+      ...obstacles.flatMap((r) => [r.left - 22, r.right + 22]),
     ],
     width,
-    24,
+    28,
   );
   const ys = axis(
     points.map((p) => p.y),
     [
       inset,
       height - inset,
-      ...walls.flatMap((r) => [r.top - 20, r.bottom + 20]),
+      ...obstacles.flatMap((r) => [r.top - 22, r.bottom + 22]),
     ],
     height,
-    28,
+    34,
   );
   const grid: Cell[] = [],
     map = new Map<number, Cell>();
   for (const [row, y] of ys.entries())
     for (const [col, x] of xs.entries()) {
       const cell: Cell = { id: grid.length, row, col, x, y, exits: [] };
-      if (!blocked(cell, cell, walls)) {
+      if (!blocked(cell, cell, obstacles, clearance)) {
         grid.push(cell);
         map.set(row * xs.length + col, cell);
       }
@@ -234,19 +234,42 @@ export function makeMaze(
       if (
         next &&
         (dx ? next.row === cell.row : next.col === cell.col) &&
-        !blocked(cell, next, walls)
+        !blocked(cell, next, obstacles, clearance)
       ) {
         cell.exits.push(next.id);
         next.exits.push(cell.id);
       }
     }
   if (!grid.length) return empty();
-  // A shortest-path tree joins selected food runs through the cheapest gutters.
-  // Candidate graph size is bounded (24 × 28); only the chosen routes survive.
-  const full: Maze = { ...empty(), cells: grid };
-  const anchors = runs.map(
-    ([a, b]) => [closest(full, a), closest(full, b)] as const,
-  );
+  // Use the largest connected whitespace component. A narrow blocked pocket
+  // must not hide a perfectly usable route elsewhere in the viewport.
+  const visited = new Set<number>();
+  let connected: number[] = [];
+  for (const cell of grid) {
+    if (visited.has(cell.id)) continue;
+    const group = [cell.id];
+    visited.add(cell.id);
+    for (let i = 0; i < group.length; i++)
+      for (const id of grid[group[i]!]!.exits)
+        if (!visited.has(id)) {
+          visited.add(id);
+          group.push(id);
+        }
+    if (group.length > connected.length) connected = group;
+  }
+  if (connected.length < 2) return empty();
+  const nearest = (p: Point) =>
+    connected.reduce(
+      (best, id) =>
+        (grid[id]!.x - p.x) ** 2 + (grid[id]!.y - p.y) ** 2 <
+        (grid[best]!.x - p.x) ** 2 + (grid[best]!.y - p.y) ** 2
+          ? id
+          : best,
+      connected[0]!,
+    );
+  // A bounded visibility graph joins a few content-adjacent food runs.
+
+  const anchors = runs.map(([a, b]) => [nearest(a), nearest(b)] as const);
   const root = anchors[0]![0];
   const costs = new Float64Array(grid.length).fill(Infinity),
     previous = new Int16Array(grid.length).fill(-1),
@@ -266,7 +289,7 @@ export function makeMaze(
     for (const next of a.exits) {
       const b = grid[next]!,
         length = Math.hypot(a.x - b.x, a.y - b.y);
-      const cost = best + length + crossings(a, b) * (a.x === b.x ? 320 : 100);
+      const cost = best + length;
       if (cost < costs[next]!) {
         costs[next] = cost;
         previous[next] = id;
@@ -306,6 +329,24 @@ export function makeMaze(
       }
     }
   }
+  const trailLength = [...edges].reduce((sum, key) => {
+    const [a, b] = key.split(",").map(Number);
+    return (
+      sum + Math.hypot(grid[a!]!.x - grid[b!]!.x, grid[a!]!.y - grid[b!]!.y)
+    );
+  }, 0);
+  // A group of nearby anchors can collapse to a tiny stub. Extend along the
+  // same safe component instead of leaving a few power squares as the level.
+  if (
+    !edges.size ||
+    (height >= 100 && trailLength < Math.min(650, (width + height) * 0.6))
+  ) {
+    const end = connected.reduce(
+      (best, id) => (costs[id]! > costs[best]! ? id : best),
+      root,
+    );
+    route(end);
+  }
   const used = [
     ...new Set([...edges].flatMap((e) => e.split(",").map(Number))),
   ];
@@ -328,7 +369,7 @@ export function makeMaze(
   maze.start = closest(maze, { x: width * 0.35, y: height * 0.55 });
   const food = (p: Point, cell: number) => {
     if (
-      !inText(p) &&
+      !blocked(p, p, obstacles, clearance) &&
       maze.pellets.length < 280 &&
       !maze.pellets.some((q) => Math.hypot(p.x - q.x, p.y - q.y) < 17)
     )
@@ -457,4 +498,33 @@ export function reverse(maze: Maze, actor: Actor) {
       maze.cells[a]!.y - maze.cells[actor.from]!.y,
     ) - actor.offset;
   actor.direction = opposite(actor.direction);
+}
+
+/** Correct only sideways drift onto a nearby parallel trail. A perpendicular
+ * input always leaves it, so there is no snap, lock, idle drift or forced turn. */
+export function guideToTrail(
+  maze: Maze,
+  point: Point,
+  heading: number,
+  travel: number,
+): Point {
+  const horizontal = heading === 0 || heading === 2;
+  let delta = Infinity;
+  for (const a of maze.cells)
+    for (const id of a.exits) {
+      if (id <= a.id) continue;
+      const b = maze.cells[id]!;
+      if (horizontal ? a.y !== b.y : a.x !== b.x) continue;
+      const along = horizontal ? point.x : point.y,
+        lo = horizontal ? Math.min(a.x, b.x) : Math.min(a.y, b.y),
+        hi = horizontal ? Math.max(a.x, b.x) : Math.max(a.y, b.y);
+      if (along < lo || along > hi) continue;
+      const d = horizontal ? a.y - point.y : a.x - point.x;
+      if (Math.abs(d) < Math.abs(delta)) delta = d;
+    }
+  if (Math.abs(delta) > 12) return point;
+  const pull = Math.sign(delta) * Math.min(Math.abs(delta), travel * 0.28);
+  return horizontal
+    ? { x: point.x, y: point.y + pull }
+    : { x: point.x + pull, y: point.y };
 }

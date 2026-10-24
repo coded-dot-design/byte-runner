@@ -8,6 +8,8 @@ import {
   advance,
   direction,
   reverse,
+  guideToTrail,
+  TRAIL_CLEARANCE,
 } from "../src/maze.ts";
 function rng(seed) {
   return () => {
@@ -40,13 +42,13 @@ test("desktop, mobile and ultrawide mazes keep every pellet reachable and clear 
       assert.ok(m.pellets.filter((p) => p.power).length >= 6);
       assert.ok(m.pellets.filter((p) => p.power).length <= 8);
       for (const p of m.pellets) {
-        assert.equal(blocked(p, p, walls), false);
+        assert.equal(blocked(p, p, walls, m.clearance), false);
         assert.ok(p.x >= 0 && p.x <= width && p.y >= 0 && p.y <= height);
       }
       for (const a of m.cells)
         for (const id of a.exits) {
           const b = m.cells[id];
-          assert.equal(blocked(a, b, walls), false);
+          assert.equal(blocked(a, b, walls, m.clearance), false);
           assert.ok(b.exits.includes(a.id));
         }
     }
@@ -99,7 +101,7 @@ test("an occluded viewport has no fake corridors through page elements", () => {
   assert.equal(m.pellets.length, 0);
 });
 
-test("text runs provide sparse food-free bite lanes and readable gutters", () => {
+test("text, pellets and the full soft corridor width never overlap", () => {
   const text = [];
   for (let i = 0; i < 14; i++)
     text.push({
@@ -111,10 +113,13 @@ test("text runs provide sparse food-free bite lanes and readable gutters", () =>
   const m = makeMaze(900, 650, [], rng(8), text);
   assert.ok(m.pellets.length < 160, `sparse food: ${m.pellets.length}`);
   assert.ok([...distances(m, m.start)].every((d) => d >= 0));
-  assert.ok(
-    m.cells.some((c) => text.some((r) => c.y > r.top && c.y < r.bottom)),
-    "navigation follows actual text lines",
-  );
+  for (const a of m.cells)
+    for (const id of a.exits)
+      assert.equal(
+        blocked(a, m.cells[id], text, TRAIL_CLEARANCE),
+        false,
+        "entire corridor clears text",
+      );
   for (const p of m.pellets)
     assert.ok(
       !text.some(
@@ -126,17 +131,67 @@ test("text runs provide sparse food-free bite lanes and readable gutters", () =>
       ),
       "pellets stay outside text",
     );
-  assert.ok(
-    m.pellets.filter((p) => p.x >= 75 && p.x <= 605 && p.y >= 70 && p.y <= 530)
-      .length /
-      m.pellets.length >
-      0.85,
-    "trails follow the content rather than filling the viewport",
-  );
+  assert.ok(m.cells.length > 2);
 });
 
 test("short viewports remain one clearable food run", () => {
   const maze = makeMaze(900, 68, [], rng(4));
   assert.equal(new Set(maze.pellets.map((p) => p.y)).size, 1);
   assert.ok(maze.pellets.length > 10);
+});
+
+test("magnet assists parallel travel but never traps perpendicular or distant movement", () => {
+  const maze = {
+    cells: [
+      { id: 0, x: 20, y: 40, exits: [1] },
+      { id: 1, x: 200, y: 40, exits: [0, 2] },
+      { id: 2, x: 200, y: 180, exits: [1] },
+    ],
+  };
+  assert.deepEqual(guideToTrail(maze, { x: 80, y: 48 }, 0, 4), {
+    x: 80,
+    y: 46.88,
+  });
+  assert.deepEqual(guideToTrail(maze, { x: 80, y: 48 }, 1, 4), {
+    x: 80,
+    y: 48,
+  });
+  assert.deepEqual(guideToTrail(maze, { x: 80, y: 60 }, 0, 4), {
+    x: 80,
+    y: 60,
+  });
+  assert.deepEqual(guideToTrail(maze, { x: 80, y: 48 }, 0, 0), {
+    x: 80,
+    y: 48,
+  });
+  assert.deepEqual(guideToTrail(maze, { x: 192, y: 100 }, 3, 4), {
+    x: 193.12,
+    y: 100,
+  });
+});
+
+test("narrow mobile gutters retain a useful route for every starting branch", () => {
+  const text = Array.from({ length: 8 }, (_, i) => ({
+    left: 29,
+    right: 350,
+    top: 170 + i * 27,
+    bottom: 190 + i * 27,
+  }));
+  const walls = [
+    { left: 10, right: 380, top: 60, bottom: 120 },
+    { left: 160, right: 380, top: 10, bottom: 179 },
+    { left: 29, right: 361, top: 683, bottom: 948 },
+    { left: 27, right: 205, top: 427, bottom: 469 },
+    { left: 29, right: 203, top: 487, bottom: 529 },
+  ];
+  for (let seed = 1; seed <= 20; seed++) {
+    const m = makeMaze(390, 900, walls, rng(seed), text);
+    assert.ok(m.pellets.length > 20);
+    for (const a of m.cells)
+      for (const id of a.exits)
+        assert.equal(
+          blocked(a, m.cells[id], [...walls, ...text], m.clearance),
+          false,
+        );
+  }
 });

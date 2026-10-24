@@ -74,7 +74,8 @@ export function createPresentation(api: GameContext) {
     foodLayer: SVGGElement,
     fruit: SVGGElement,
     flyLayer: SVGGElement;
-  let pellets: SVGElement[] = [];
+  let pellets: SVGElement[] = [],
+    flyScale = 1.1;
   const flies = new Map<
     number,
     {
@@ -88,10 +89,10 @@ export function createPresentation(api: GameContext) {
     const box = host.getBoundingClientRect(),
       scaleX = box.width / (host.clientWidth || box.width) || 1,
       scaleY = box.height / (host.clientHeight || box.height) || 1;
-    const left = Math.max(8, box.left),
-      top = Math.max(8, box.top),
-      right = Math.min(api.width - 8, box.right),
-      bottom = Math.min(api.height - 8, box.bottom);
+    const left = Math.max(0, box.left),
+      top = Math.max(0, box.top),
+      right = Math.min(api.width, box.right),
+      bottom = Math.min(api.height, box.bottom);
     const convert = (r: {
       left: number;
       right: number;
@@ -119,10 +120,14 @@ export function createPresentation(api: GameContext) {
     const targets = new Set<Element>([
       ...api.board.targets.map((t) => t.element).filter(Boolean),
       ...explicit,
+      ...doc.querySelectorAll("[data-byte-obstacle]"),
+      ...root!.querySelectorAll(
+        'button,a[href],input,select,textarea,summary,[role="button"],[contenteditable="true"],img,svg,canvas,video,iframe,object,embed,pre,table,hr,figure,fieldset,details,[role="img"]',
+      ),
     ]);
     const walls: Wall[] = [],
       solids: Wall[] = [];
-    for (const el of [...targets].slice(0, 50)) {
+    for (const el of targets) {
       const r = el.getBoundingClientRect();
       if (visible(r)) {
         const w = convert(r);
@@ -130,21 +135,43 @@ export function createPresentation(api: GameContext) {
         if (explicit.has(el)) solids.push(w);
       }
     }
-    // Real text line boxes provide the whitespace. One bounded measurement pass,
-    // not fake text, wrapper nodes, or per-frame reconstruction.
+    // All visible text is occupied terrain, including non-edible labels. Only
+    // collection uses the board's eligible glyphs. No wrappers or text mutation
+    // are needed to measure whitespace.
     const text: Wall[] = [],
-      seen = new Set<Text>(),
       range = doc.createRange();
-    for (const glyph of api.board.glyphs) {
-      const node = glyph.record.node;
-      if (seen.has(node) || !node.isConnected) continue;
-      seen.add(node);
+    const walker = doc.createTreeWalker(root!, 4);
+    const boxes = new Map<Element, DOMRect>(),
+      fallback = new Map<Element, Wall>();
+    let node: Node | null;
+    while ((node = walker.nextNode())) {
+      if (!node.textContent?.trim()) continue;
       const parent = node.parentElement;
-      if (!parent || !visible(parent.getBoundingClientRect())) continue;
+      if (
+        !parent ||
+        parent.closest(
+          "script,style,noscript,svg,canvas,button,a[href],input,select,textarea,pre,table,[data-dom-virus-root],[data-virus-ui]",
+        )
+      )
+        continue;
+      let box = boxes.get(parent);
+      if (!box) {
+        box = parent.getBoundingClientRect();
+        boxes.set(parent, box);
+      }
+      if (!visible(box)) continue;
+      // Beyond the detailed line budget, block the native parent conservatively.
+      if (text.length >= 200) {
+        if (!fallback.has(parent)) {
+          const r = convert(box);
+          text.push(r);
+          fallback.set(parent, r);
+        }
+        continue;
+      }
       range.selectNodeContents(node);
       for (const r of range.getClientRects())
-        if (visible(r) && text.length < 120) text.push(convert(r));
-      if (text.length >= 120 || seen.size >= 90) break;
+        if (visible(r)) text.push(convert(r));
     }
     const width = Math.max(0, (right - left) / scaleX),
       height = Math.max(0, (bottom - top) / scaleY),
@@ -158,12 +185,12 @@ export function createPresentation(api: GameContext) {
         height,
         ...walls.flatMap((w) => [w.left, w.top, w.right, w.bottom]),
       ]
-        .map((n) => Math.round(n / 12))
+        .map((n) => Math.round(n / 2))
         .join(",") +
       "|" +
       text
         .flatMap((r) => [r.left, r.top, r.right, r.bottom])
-        .map((n) => Math.round(n / 28))
+        .map((n) => Math.round(n / 2))
         .join(",");
     return {
       x,
@@ -182,19 +209,41 @@ export function createPresentation(api: GameContext) {
   }
   function mount(maze: Maze, next: Frame) {
     frame = next;
+    flyScale = maze.radius < 12 ? 0.78 : 1.1;
     svg.style.left = `${frame.x}px`;
     svg.style.top = `${frame.y}px`;
     set(svg, "width", String(frame.width));
     set(svg, "height", String(frame.height));
     set(svg, "viewBox", `0 0 ${frame.width || 1} ${frame.height || 1}`);
-    // Only food and creatures are painted. The page supplies every surface.
+    // Two strokes in a mask leave only the soft outside edges of the union.
+    // The center stays transparent, with no crossbars across route junctions.
     if (!runner)
       svg.innerHTML =
-        '<g data-byte-food shape-rendering="crispEdges"></g><g data-byte-fruit visibility="hidden" shape-rendering="crispEdges"></g><g data-byte-flies></g><g data-byte-runner><g transform="scale(1.2) translate(-12 -15)"><g data-byte-pose shape-rendering="crispEdges"><path data-byte-feet/><g data-byte-torso><path data-byte-body/><g data-byte-eyes><path data-stems/><path data-cream/><path data-pupils/></g></g></g></g></g>';
+        '<defs><mask id="byte-trail-edge" maskUnits="userSpaceOnUse"><g fill="none" stroke-linecap="round" stroke-linejoin="round"><path data-byte-edge-outer stroke="white"/><path data-byte-edge-inner stroke="black"/></g></mask></defs><path data-byte-guides fill="none" stroke-linecap="round" stroke-linejoin="round" mask="url(#byte-trail-edge)"/><g data-byte-food shape-rendering="crispEdges"></g><g data-byte-fruit visibility="hidden" shape-rendering="crispEdges"></g><g data-byte-flies></g><g data-byte-runner><g transform="scale(1.2) translate(-12 -15)"><g data-byte-pose shape-rendering="crispEdges"><path data-byte-feet/><g data-byte-torso><path data-byte-body/><g data-byte-eyes><path data-stems/><path data-cream/><path data-pupils/></g></g></g></g></g>';
     const dark =
       api.options.theme === "dark" ||
       (api.options.theme !== "light" &&
         doc.defaultView!.matchMedia("(prefers-color-scheme:dark)").matches);
+    const mask = svg.querySelector("mask")!;
+    for (const [key, value] of Object.entries({
+      x: 0,
+      y: 0,
+      width: frame.width,
+      height: frame.height,
+    }))
+      set(mask, key, String(value));
+    for (const [selector, width] of [
+      ["[data-byte-edge-outer]", maze.radius * 2],
+      ["[data-byte-edge-inner]", maze.radius * 2 - 3],
+      ["[data-byte-guides]", maze.radius * 2],
+    ] as const) {
+      const path = svg.querySelector(selector)!;
+      set(path, "d", maze.path);
+      set(path, "stroke-width", String(width));
+    }
+    const guides = svg.querySelector("[data-byte-guides]")!;
+    set(guides, "stroke", dark ? "#b1a1e8" : "#8573bb");
+    set(guides, "opacity", dark ? ".25" : ".32");
     const food = (foodLayer =
       svg.querySelector<SVGGElement>("[data-byte-food]")!);
     food.replaceChildren();
@@ -206,8 +255,10 @@ export function createPresentation(api: GameContext) {
       );
       if (p.power) {
         n.setAttribute("transform", `translate(${p.x} ${p.y})`);
-        n.innerHTML =
-          '<rect x="-14" y="-14" width="28" height="28" fill="#f4457a" opacity=".1"/><rect x="-10" y="-10" width="20" height="20" fill="#f4457a" opacity=".24"/><rect x="-7" y="-7" width="14" height="14" fill="#f4457a"/>';
+        const halo = Math.min(14, maze.radius),
+          glow = Math.min(10, maze.radius - 1),
+          core = Math.min(7, maze.radius - 2);
+        n.innerHTML = `<rect x="${-halo}" y="${-halo}" width="${halo * 2}" height="${halo * 2}" fill="#f4457a" opacity=".1"/><rect x="${-glow}" y="${-glow}" width="${glow * 2}" height="${glow * 2}" fill="#f4457a" opacity=".24"/><rect x="${-core}" y="${-core}" width="${core * 2}" height="${core * 2}" fill="#f4457a"/>`;
       } else {
         n.setAttribute("x", String(p.x - 2));
         n.setAttribute("y", String(p.y - 2));
@@ -332,7 +383,7 @@ export function createPresentation(api: GameContext) {
       set(
         sprite.node,
         "transform",
-        `translate(${g.x.toFixed(2)} ${g.y.toFixed(2)}) scale(1.1) translate(-13 -11)`,
+        `translate(${g.x.toFixed(2)} ${g.y.toFixed(2)}) scale(${flyScale}) translate(-13 -11)`,
       );
       const flap = wingFrame(api.time, g.phase, api.reducedMotion);
       set(sprite.wing, "d", FLY_WINGS[flap]!);
@@ -389,6 +440,9 @@ export function createPresentation(api: GameContext) {
   }
   return {
     measure,
+    visible(show: boolean) {
+      set(svg, "visibility", show ? "visible" : "hidden");
+    },
     mount,
     viewport,
     local,

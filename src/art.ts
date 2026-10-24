@@ -18,7 +18,7 @@ export const CREAM = "#fff5d7",
   WING = "#d9f0f3";
 export type Facing = 0 | 1 | 2 | 3;
 // A 24 × 24 stepped disc: the mouth cuts the silhouette, never a dark outline.
-function mask(front: boolean, mouth: number, facing: Facing) {
+function mask(front: boolean, mouth: number) {
   const cells = new Set<string>();
   for (let y = 0; y < 24; y++)
     for (let x = 0; x < 24; x++) {
@@ -26,12 +26,12 @@ function mask(front: boolean, mouth: number, facing: Facing) {
         dy = y - 11.5;
       if (dx * dx + dy * dy <= 12 * 12) cells.add(`${x},${y + 3}`);
     }
+  if (front) return cells; // Eyes-only vertical poses keep the round body whole.
   const slope = mouth === 2 ? 0.95 : mouth === 1 ? 0.48 : 0;
   for (const key of cells) {
     const [x, y] = key.split(",").map(Number) as [number, number];
-    // Front/back chomps open toward travel while eyes and feet stay upright.
-    const forward = front ? (facing === 3 ? 11 - y : y - 18) : x - 11.5;
-    const across = front ? Math.abs(x - 11.5) : Math.abs(y - 14.5);
+    const forward = x - 11.5,
+      across = Math.abs(y - 14.5);
     if (forward > 0 && across <= Math.max(0.5, forward * slope))
       cells.delete(key);
   }
@@ -61,7 +61,7 @@ function path(cells: Set<string>) {
 }
 export const FROG_BODIES = Array.from({ length: 4 }, (_, facing) =>
   Array.from({ length: 3 }, (_, mouth) => {
-    const pixels = mask(facing === 1 || facing === 3, mouth, facing as Facing);
+    const pixels = mask(facing === 1 || facing === 3, mouth);
     return { body: path(pixels) };
   }),
 );
@@ -77,12 +77,15 @@ export const FROG_EYES = {
     pupils: "M7 3h2v3H7ZM17 3h2v3h-2Z",
   },
 } as const;
+// Two tiny stepped balls, alternating their height without moving the hitbox.
+const foot = (x: number, y: number) =>
+  `M${x + 1} ${y}h3v1h1v3h-1v1h-3v-1h-1v-3h1Z`;
 export const FROG_FEET = [
-  "M4 23h4v2h1v2H2v-2h2ZM17 23h4v2h2v2h-7v-2h1Z",
-  "M3 23h4v2h2v2H2v-1H1v-2h2ZM18 23h4v2h2v1h-6Z",
-  "M4 23h4v2h2v1H3v-1h1ZM17 23h4v2h2v2h-7v-1h-1v-2h2Z",
-  "M5 23h4v2h2v1H4v-1h1ZM16 23h4v2h1v2h-7v-2h2Z",
-  "M3 23h4v2h2v1H2v-1h1ZM18 23h4v2h2v2h-7v-2h1Z",
+  foot(3, 23) + foot(16, 23),
+  foot(2, 22) + foot(17, 24),
+  foot(3, 23) + foot(16, 23),
+  foot(4, 24) + foot(15, 22),
+  foot(3, 24) + foot(16, 23),
 ] as const;
 export const FLY_BODY =
   "M9 5h8v1h3v2h2v9h-1v2h-3v1h-2v-2h-3v2h-3v-2H7v-2H6v-5h1V8h2Z";
@@ -97,7 +100,7 @@ export function frogArt(mouth = 1, power = false): PixelArt {
   const body = FROG_BODIES[0]![mouth]!,
     eyes = FROG_EYES.side;
   return {
-    viewBox: "-2 -1 28 29",
+    viewBox: "-2 -1 28 31",
     layers: [
       { d: FROG_FEET[0], fill: power ? FROG.power : FROG.body },
       { d: body.body, fill: power ? FROG.power : FROG.body },

@@ -5,7 +5,7 @@
   "name": "Byte Runner",
   "kind": "DOM CHASE",
   "tagline": "Follow the bites. Eat the page.",
-  "description": "A round, hungry pixel frog chomps through the webpage. Follow short food trails along text and gutters, grab glowing power squares, and chase a growing swarm of flies.",
+  "description": "A round, hungry pixel frog follows soft food trails through the page’s whitespace. Drift onto the pellet lines, roam off them to eat real text, and chase flies that stay on the trails.",
   "accent": "lime",
   "icon": "runner",
   "versionNote": "Food trails. Tiny feet. A very real page.",
@@ -37,7 +37,7 @@
   "chapters": [
     {
       "title": "The UI is the terrain.",
-      "body": "A few compact food trails follow real text lines and UI gutters. Pellets stay in whitespace; real letters supply the food on text runs. Leave the trails to explore and eat the page. Eat each square once to clear the level; returning food is a bonus."
+      "body": "Soft maze edges trace the whitespace around text, controls and media. The edges are only guides: nearby parallel trails gently help your aim, and steering across one takes you straight off it. Eat real letters on your detours. Eat each square once to clear the level; returning food is a bonus."
     },
     {
       "title": "Big glow. Bigger appetite.",
@@ -45,7 +45,7 @@
     },
     {
       "title": "Small feet. Big appetite.",
-      "body": "A round, outline-free frog opens a wide chomp as it runs, with tiny scrambling feet that stop when you stop. Violet flies pursue directly, pink flies anticipate your heading, and cyan Roamers mix pursuit with wandering. All flies follow the same trails, even after the food is eaten."
+      "body": "A round, outline-free frog chomps sideways and looks up or down with a full, simple body. Tiny ball-shaped feet scramble only while moving. Violet flies pursue directly, pink flies anticipate your heading, and cyan Roamers mix pursuit with wandering. Flies stay on the same trails, even after food is eaten."
     },
     {
       "title": "The DOM carries the trails.",
@@ -68,7 +68,7 @@
       "icon": "runner",
       "name": "Byte Runner",
       "role": "You",
-      "rules": "A round green frog with a wide, rhythmic chomp and tiny scrambling feet. Follow the short food trails, or roam freely and eat real page letters.",
+      "rules": "A round green frog with a wide side chomp, expressive eyes and tiny ball-shaped feet. Nearby trails gently guide parallel movement; steer across them to roam freely and eat real letters.",
       "color": "#3ecb74"
     },
     {

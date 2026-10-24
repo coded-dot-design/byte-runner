@@ -144,3 +144,9 @@ After checks pass on `main`, CI creates the tag matching `package.json` (for exa
 Target beacons now attach to their actual elements. Native layout handles their scrolling, clipping and transforms. Mobile uses stationary rings and stable fills. See the [shared DOM ownership design](https://github.com/coded-dot-design/dom-virus/blob/main/docs/dom-ownership.md).
 
 Frog and fly artwork is owned by `src/art.ts`; builds generate `site/art.json` for the website. The frog combines separate body/mouth, eyes and feet. Its four-frame run advances only on actual movement, with a wider independent chomp while moving or eating. Characters have no outline or protection ring; protection uses a restrained opacity cue. Fly wings use stable individual phases. Reduced motion disables bobbing, foot loops and wing flaps.
+
+### Whitespace trails
+
+Food and soft corridor edges keep clear of visible text, native controls and media. The edges are visual guides, not player walls: parallel travel within 12 logical pixels receives a small sideways assist, while perpendicular input freely leaves the path. Flies remain on the connected route graph. Vertical frog poses show its eyes and round body without a mouth cutout.
+
+Mark a composite panel with `data-byte-obstacle` to keep food, flies and guide edges around its whole rectangle while the frog remains free to cross it. `data-byte-wall` also blocks the frog.

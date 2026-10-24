@@ -13,6 +13,7 @@ import {
   distances,
   makeMaze,
   opposite,
+  guideToTrail,
   reverse,
   blocked,
   DIRECTIONS,
@@ -74,14 +75,18 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
     fruitIn = 14,
     fruitCount = 0;
   let geometryIn = 0,
-    pendingKey = "",
     chaseIn = 0;
   let fields: Int16Array[] = [];
-  let sealDuration = 6;
+  let sealDuration = 6,
+    terrainReady = false;
   let food = new Map<string, Pellet[]>();
   const bin = (p: Point) => `${Math.floor(p.x / 36)},${Math.floor(p.y / 36)}`;
   const event = (type: string, data: Record<string, unknown> = {}) =>
     api.emit(type, data);
+  const keepInView = (p: Point): Point => ({
+    x: clamp(p.x, 15, frame.width - 15),
+    y: clamp(p.y, 18, frame.height - 18),
+  });
   function generate(preserve = false, nextFrame = view.measure()) {
     const oldFood = maze?.pellets ?? [];
     const oldRemaining = remaining,
@@ -103,6 +108,8 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
     );
     // A temporarily occluded root must not count as a cleared level.
     if (nextMaze.cells.length < 2 || !nextMaze.pellets.length) {
+      terrainReady = false;
+      view.visible(false);
       if (!maze) {
         maze = nextMaze;
         frame = nextFrame;
@@ -110,6 +117,8 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
       }
       return false;
     }
+    terrainReady = true;
+    view.visible(true);
     maze = nextMaze;
     frame = nextFrame;
     if (preserve) {
@@ -153,6 +162,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
       food.set(key, group);
     }
     player = actorAt(maze, maze.start);
+    Object.assign(player, keepInView(player));
     requested = -1;
     animation.moving = false;
     if (!preserve) {
@@ -175,8 +185,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
     view.syncPosition();
     if (oldPlayer) {
       const point = view.local(oldPlayer);
-      player.x = clamp(point.x, 14, frame.width - 14);
-      player.y = clamp(point.y, 14, frame.height - 14);
+      Object.assign(player, keepInView(point));
       player.from = player.to = closest(maze, player);
       player.direction = oldPlayer.direction;
     }
@@ -213,7 +222,6 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
     total = 0;
     transition = 0;
     geometryIn = 0;
-    pendingKey = "";
     fruitCount = 0;
     api.board.resetTargets(100);
     generate();
@@ -314,15 +322,11 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
     if (geometryIn <= 0) {
       geometryIn = 0.35;
       const next = view.measure();
-      if (next.key !== frame.key) {
-        if (pendingKey === next.key) {
-          generate(!!player, next);
-          pendingKey = "";
-        } else pendingKey = next.key;
-      } else pendingKey = "";
+      if (!terrainReady || next.key !== frame.key) generate(!!player, next);
     }
+
     view.syncPosition();
-    if (!player || maze.cells.length < 2) return;
+    if (!terrainReady || !player || maze.cells.length < 2) return;
     if (transition > 0) {
       animation.moving = false;
       transition -= dt;
@@ -354,14 +358,17 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
       while (travel > 0.001) {
         const step = Math.min(6, travel);
         travel -= step;
-        const next = {
-          x: clamp(player.x + (dx * step) / frame.scaleX, 14, frame.width - 14),
-          y: clamp(
-            player.y + (dy * step) / frame.scaleY,
-            14,
-            frame.height - 14,
+        const next = keepInView(
+          guideToTrail(
+            maze,
+            {
+              x: player.x + (dx * step) / frame.scaleX,
+              y: player.y + (dy * step) / frame.scaleY,
+            },
+            requested,
+            step / (dx ? frame.scaleX : frame.scaleY),
           ),
-        };
+        );
         if (blocked(player, next, frame.solids, 15)) break;
         player.x = next.x;
         player.y = next.y;
@@ -466,6 +473,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
             return;
           }
           player = actorAt(maze, maze.start);
+          Object.assign(player, keepInView(player));
           requested = -1;
           animation.moving = false;
           animation.runTime = 0;
@@ -506,11 +514,12 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
           ...at,
           angle: (Math.max(0, player?.direction ?? 0) * Math.PI) / 2,
         },
-        detail: !player
-          ? "Scroll to an open part of the page to find food trails"
-          : transition > 0
-            ? `LEVEL ${wave} CLEAR · Next trails incoming`
-            : `${remaining} PELLETS LEFT · ${power > 0 ? `POWER ${power.toFixed(1)}s · Hunt flies` : "Arrows / WASD · Follow the bites · Fruit = bonus"}`,
+        detail:
+          !terrainReady || !player
+            ? "Scroll to an open part of the page to find food trails"
+            : transition > 0
+              ? `LEVEL ${wave} CLEAR · Next trails incoming`
+              : `${remaining} PELLETS LEFT · ${power > 0 ? `POWER ${power.toFixed(1)}s · Hunt flies` : "Arrows / WASD · Follow the bites · Fruit = bonus"}`,
       };
     },
   };

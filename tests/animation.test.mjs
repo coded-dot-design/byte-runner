@@ -40,7 +40,7 @@ test("all directions and startup clock edges have finite, defined geometry", () 
       assert.ok(FROG_BODIES[facing][f.mouth].body);
   }
   assert.ok(FROG_EYES.front.cream);
-  assert.equal(frogArt().viewBox, "-2 -1 28 29");
+  assert.equal(frogArt().viewBox, "-2 -1 28 31");
 });
 
 test("running keeps a wide chomp cycle even between food, with no rim layer", () => {
@@ -57,4 +57,11 @@ test("running keeps a wide chomp cycle even between food, with no rim layer", ()
       (layer) => !["#19774d", "#438c40"].includes(layer.fill),
     ),
   );
+});
+
+test("vertical poses keep the whole round body across every chomp frame", () => {
+  for (const direction of [1, 3])
+    assert.equal(new Set(FROG_BODIES[direction].map((f) => f.body)).size, 1);
+  assert.equal(FROG_BODIES[1][0].body, FROG_BODIES[3][0].body);
+  assert.notEqual(FROG_BODIES[0][0].body, FROG_BODIES[0][2].body);
 });

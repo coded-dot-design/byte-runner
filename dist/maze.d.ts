@@ -1,4 +1,4 @@
-/** A connected, bounded corridor graph. Native page rectangles cut real walls. */
+/** Whitespace routes guide food and flies; their soft edges never fence in the frog. */
 export interface Point {
     x: number;
     y: number;
@@ -27,9 +27,13 @@ export interface Maze {
     cells: Cell[];
     pellets: Pellet[];
     step: number;
+    radius: number;
+    clearance: number;
     start: number;
     path: string;
 }
+export declare const TRAIL_RADIUS = 15;
+export declare const TRAIL_CLEARANCE: number;
 export declare const DIRECTIONS: readonly [readonly [1, 0], readonly [0, 1], readonly [-1, 0], readonly [0, -1]];
 export declare const opposite: (direction: number) => number;
 export declare function direction(a: Point, b: Point): 0 | 1 | 2 | 3;
@@ -47,3 +51,6 @@ export declare function actorAt(maze: Maze, id: number): Actor;
 /** Select at junctions, then spend the whole frame's distance along valid edges. */
 export declare function advance(maze: Maze, actor: Actor, distance: number, choose: (cell: Cell) => number | undefined, visit?: (point: Point) => void): void;
 export declare function reverse(maze: Maze, actor: Actor): void;
+/** Correct only sideways drift onto a nearby parallel trail. A perpendicular
+ * input always leaves it, so there is no snap, lock, idle drift or forced turn. */
+export declare function guideToTrail(maze: Maze, point: Point, heading: number, travel: number): Point;
