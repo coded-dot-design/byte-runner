@@ -13,7 +13,6 @@ import {
   distances,
   makeMaze,
   opposite,
-  guideToTrail,
   reverse,
   blocked,
   DIRECTIONS,
@@ -23,12 +22,15 @@ import { createPresentation } from "./presentation.js";
 import type { Frame } from "./presentation.js";
 import { MAX_GHOSTS, extendPower } from "./rules.js";
 import { eatPellet, refillPellet, PELLET_RETURN_SECONDS } from "./food.js";
+import { catchTrail, runPipe, tongueTarget } from "./movement.js";
 import { createRunnerAnimation, moveAnimation } from "./animation.js";
 
 interface Ghost extends Actor {
   id: number;
   kind: number;
   phase: number;
+  hopIn: number;
+  landing: number;
 }
 interface Fruit extends Point {
   kind: number;
@@ -74,6 +76,13 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
     spawnIn = 1.2,
     fruitIn = 14,
     fruitCount = 0;
+  let attached = true,
+    jumpUntil = 0,
+    lastInput = -1,
+    lastTap = -1,
+    tapAt = -1,
+    layoutKey = "",
+    revision = 0;
   let geometryIn = 0,
     chaseIn = 0;
   let fields: Int16Array[] = [];
@@ -103,7 +112,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
       nextFrame.width,
       nextFrame.height,
       nextFrame.walls,
-      seededRandom(seed + wave * 7919),
+      seededRandom(seed + wave * 7919 + revision * 3571),
       nextFrame.text,
     );
     // A temporarily occluded root must not count as a cleared level.
@@ -117,6 +126,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
       }
       return false;
     }
+    layoutKey = view.geometryKey();
     terrainReady = true;
     view.visible(true);
     maze = nextMaze;
@@ -164,6 +174,9 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
     player = actorAt(maze, maze.start);
     Object.assign(player, keepInView(player));
     requested = -1;
+    attached = true;
+    jumpUntil = 0;
+    lastInput = lastTap = -1;
     animation.moving = false;
     if (!preserve) {
       animation.runTime = 0;
@@ -186,7 +199,8 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
     if (oldPlayer) {
       const point = view.local(oldPlayer);
       Object.assign(player, keepInView(point));
-      player.from = player.to = closest(maze, player);
+      const caught = catchTrail(maze, player, oldPlayer.direction, Infinity);
+      if (caught) Object.assign(player, caught);
       player.direction = oldPlayer.direction;
     }
     for (const g of oldGhosts) {
@@ -196,10 +210,12 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
         id: g.id,
         kind: g.kind,
         phase: g.phase,
+        hopIn: g.hopIn,
+        landing: -1,
         direction: g.direction,
       });
     }
-    if (!preserve) for (let i = 0; i < 3; i++) spawnGhost();
+    if (!preserve) for (let i = 0; i < 5; i++) spawnGhost();
     event(preserve ? "maze-reflow" : "level-start", {
       wave,
       pellets: remaining,
@@ -210,6 +226,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
   function reset() {
     animation = createRunnerAnimation();
     sequence = 0;
+    revision = 0;
     score = 0;
     lives = 3;
     wave = 1;
@@ -278,7 +295,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
   function spawnGhost() {
     if (
       !player ||
-      ghosts.length >= Math.min(MAX_GHOSTS, 6 + Math.floor((wave - 1) / 2))
+      ghosts.length >= Math.min(MAX_GHOSTS, 9 + Math.floor((wave - 1) / 2))
     )
       return;
     const field = distances(maze, player.to);
@@ -296,6 +313,8 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
       id: sequence++,
       kind: ghosts.length % 3,
       phase: (sequence * 0.381966 + api.random()) % 1,
+      hopIn: 4 + api.random() * 5,
+      landing: -1,
     });
     event("spawn");
   }
@@ -321,8 +340,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
     geometryIn -= dt;
     if (geometryIn <= 0) {
       geometryIn = 0.35;
-      const next = view.measure();
-      if (!terrainReady || next.key !== frame.key) generate(!!player, next);
+      if (!terrainReady || view.geometryKey() !== layoutKey) generate(!!player);
     }
 
     view.syncPosition();
@@ -349,39 +367,59 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
     }
     const nextDirection = inputDirection(),
       beforeMove = { x: player.x, y: player.y };
-    // Food trails guide exploration; no synthetic maze wall locks the player in.
-    if (nextDirection >= 0) {
-      requested = nextDirection;
-      player.direction = requested;
-      const [dx, dy] = DIRECTIONS[requested]!;
-      let travel = Math.min(220, 155 + wave * 6) * dt;
+    // A second press (not key repeat or a held direction) deliberately breaks out.
+    const turnPressed = nextDirection >= 0 && nextDirection !== lastInput;
+    if (turnPressed) {
+      if (lastTap === nextDirection && api.time - tapAt < 0.26)
+        jump(nextDirection);
+      lastTap = nextDirection;
+      tapAt = api.time;
+    }
+    lastInput = nextDirection;
+    if (nextDirection >= 0) requested = nextDirection;
+    if (attached && nextDirection >= 0) {
+      runPipe(
+        maze,
+        player,
+        requested,
+        (Math.min(300, 230 + wave * 7) * dt) /
+          Math.max(frame.scaleX, frame.scaleY),
+        collect,
+        turnPressed,
+      );
+    } else if (!attached && (nextDirection >= 0 || api.time < jumpUntil)) {
+      player.direction =
+        nextDirection >= 0 ? nextDirection : Math.max(0, player.direction);
+      const [dx, dy] = DIRECTIONS[player.direction]!;
+      let travel = (api.time < jumpUntil ? 280 : 185) * dt;
       while (travel > 0.001) {
-        const step = Math.min(6, travel);
+        const step = Math.min(5, travel);
         travel -= step;
-        const next = keepInView(
-          guideToTrail(
-            maze,
-            {
-              x: player.x + (dx * step) / frame.scaleX,
-              y: player.y + (dy * step) / frame.scaleY,
-            },
-            requested,
-            step / (dx ? frame.scaleX : frame.scaleY),
-          ),
-        );
+        const next = keepInView({
+          x: player.x + (dx * step) / frame.scaleX,
+          y: player.y + (dy * step) / frame.scaleY,
+        });
         if (blocked(player, next, frame.solids, 15)) break;
-        player.x = next.x;
-        player.y = next.y;
+        Object.assign(player, next);
         collect(player);
+        if (api.time >= jumpUntil) {
+          const caught = catchTrail(maze, player, player.direction);
+          if (caught && !blocked(player, caught, frame.solids, 15)) {
+            Object.assign(player, caught);
+            attached = true;
+            break;
+          }
+        }
       }
     }
+    animation.jumping = api.time < jumpUntil;
     moveAnimation(
       animation,
       player.x - beforeMove.x,
       player.y - beforeMove.y,
       dt,
     );
-    player.from = player.to = closest(maze, player);
+    if (!attached) player.from = player.to = closest(maze, player);
     if (!remaining) {
       transition = 1.25;
       score += 500 * wave;
@@ -436,28 +474,66 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
     for (let i = ghosts.length - 1; i >= 0; i--) {
       const g = ghosts[i]!,
         field = fields[g.kind === 1 ? 1 : 0]!;
-      advance(
-        maze,
-        g,
-        (power ? 78 : Math.min(170, 90 + wave * 5 + g.kind * 5)) * dt,
-        (cell) => {
-          const forward = cell.exits.filter(
-            (id) => direction(cell, maze.cells[id]!) !== opposite(g.direction),
+      g.hopIn -= dt;
+      if (g.landing < 0 && g.hopIn <= 0) {
+        g.hopIn = 5 + api.random() * 5;
+        // Occasional short escapes reconnect to a visible pipe; never fly off-page.
+        const choices = maze.cells.filter((c) => {
+          const d = Math.hypot(c.x - g.x, c.y - g.y);
+          return (
+            d > 45 &&
+            d < 180 &&
+            Math.abs(c.x - g.x) > 18 &&
+            Math.abs(c.y - g.y) > 18 &&
+            !blocked(g, c, frame.solids, 15) &&
+            (power ? field[c.id]! > field[g.to]! : field[c.id]! < field[g.to]!)
           );
-          const choices = forward.length ? forward : cell.exits;
-          if (g.kind === 2 && !power && api.random() < 0.2)
-            return choices[Math.floor(api.random() * choices.length)];
-          return choices
-            .slice()
-            .sort((a, b) =>
-              power ? field[b]! - field[a]! : field[a]! - field[b]!,
-            )[0];
-        },
-      );
-      if (Math.hypot(player.x - g.x, player.y - g.y) < 23) {
+        });
+        if (choices.length)
+          g.landing = choices[Math.floor(api.random() * choices.length)]!.id;
+      }
+      if (g.landing >= 0) {
+        const target = maze.cells[g.landing]!,
+          distance = Math.hypot(target.x - g.x, target.y - g.y),
+          step = Math.min(distance, 145 * dt);
+        g.direction = direction(g, target);
+        if (distance <= step) {
+          Object.assign(g, actorAt(maze, g.landing));
+          g.landing = -1;
+        } else {
+          g.x += ((target.x - g.x) * step) / distance;
+          g.y += ((target.y - g.y) * step) / distance;
+        }
+      } else
+        advance(
+          maze,
+          g,
+          (power ? 78 : Math.min(170, 90 + wave * 5 + g.kind * 5)) * dt,
+          (cell) => {
+            const forward = cell.exits.filter(
+              (id) =>
+                direction(cell, maze.cells[id]!) !== opposite(g.direction),
+            );
+            const choices = forward.length ? forward : cell.exits;
+            if (g.kind === 2 && !power && api.random() < 0.2)
+              return choices[Math.floor(api.random() * choices.length)];
+            return choices
+              .slice()
+              .sort((a, b) =>
+                power ? field[b]! - field[a]! : field[a]! - field[b]!,
+              )[0];
+          },
+        );
+      const grab =
+        power > 0 &&
+        tongueTarget(player, g) &&
+        !blocked(player, g, frame.solids, 5);
+      if (grab || Math.hypot(player.x - g.x, player.y - g.y) < 23) {
         const at = view.viewport(g);
         if (power > 0) {
           animation.chompUntil = api.time + 0.3;
+          animation.tongueUntil = api.time + 0.18;
+          animation.tongue = { x: g.x, y: g.y };
           combo++;
           const value = 100 * Math.min(combo, 4);
           score += value;
@@ -475,6 +551,8 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
           player = actorAt(maze, maze.start);
           Object.assign(player, keepInView(player));
           requested = -1;
+          attached = true;
+          jumpUntil = 0;
           animation.moving = false;
           animation.runTime = 0;
           animation.chompUntil = 0;
@@ -486,8 +564,22 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
       }
     }
   }
+  function jump(heading = inputDirection()) {
+    if (!player || !terrainReady || transition > 0) return;
+    if (heading >= 0) player.direction = heading;
+    else if (player.direction < 0) player.direction = 0;
+    attached = false;
+    jumpUntil = api.time + 0.24;
+  }
   return {
     reset,
+    action(id: string) {
+      if (id === "jump") jump();
+      if (id === "refresh" && transition <= 0) {
+        revision++;
+        generate(!!player);
+      }
+    },
     update,
     draw() {
       view.render(player, ghosts, power, shield, fruit, animation);
@@ -519,7 +611,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
             ? "Scroll to an open part of the page to find food trails"
             : transition > 0
               ? `LEVEL ${wave} CLEAR · Next trails incoming`
-              : `${remaining} PELLETS LEFT · ${power > 0 ? `POWER ${power.toFixed(1)}s · Hunt flies` : "Arrows / WASD · Follow the bites · Fruit = bonus"}`,
+              : `${remaining} PELLETS LEFT · ${power > 0 ? `POWER ${power.toFixed(1)}s · Hunt flies` : "Arrows / WASD · Space / double-tap to jump"}`,
       };
     },
   };

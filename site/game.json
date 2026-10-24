@@ -5,14 +5,14 @@
   "name": "Byte Runner",
   "kind": "DOM CHASE",
   "tagline": "Follow the bites. Eat the page.",
-  "description": "A round, hungry pixel frog explores a larger maze of food trails through the page’s whitespace. Roam off the soft edges to eat real text and chase flies that stay on the trails.",
+  "description": "A round, hungry pixel frog races through magnetic food pipes in the page’s whitespace. Jump out to eat real text, then catch another trail and hunt escaping flies.",
   "accent": "lime",
   "icon": "runner",
   "versionNote": "Food trails. Tiny feet. A very real page.",
   "controls": [
-    "Arrows / WASD / touch D-pad — move through the page",
-    "Follow the food or leave the trail to eat page text",
-    "P — pause · G — next area · Esc — Recall",
+    "Arrows / WASD / touch D-pad — race through pipes and queue turns",
+    "Space / Jump button or double-tap a direction — jump out; touch a trail to reattach",
+    "M / Refresh maze — redraw trails · P — pause · G — next area · Esc — Recall",
     "Scoreboard: sound · pause / resume · minimize · Recall"
   ],
   "facts": [
@@ -38,25 +38,25 @@
   "chapters": [
     {
       "title": "The UI is the terrain.",
-      "body": "Soft maze edges trace the whitespace around text, controls and media. The edges are only guides: nearby parallel trails gently help your aim, and steering across one takes you straight off it. Eat real letters on your detours. Eat each square once to clear the level; returning food is a bonus."
+      "body": "Soft maze edges trace the whitespace around text, controls and media. The frog sticks firmly to the centerline, carries speed through bends, and queues turns at junctions. Press Space or double-tap a direction to jump out anywhere. Eat real letters on your detours, then catch another trail."
     },
     {
       "title": "Big glow. Bigger appetite.",
-      "body": "Glowing pink power pellets turn flies blue for six seconds, stacking up to nine. Hunt them for 100, 200, 300, then 400 points. Cherries and strawberries appear on the trails for bonus points; fruit is optional and does not grant power."
+      "body": "Pink power squares emit a pulse and turn flies blue for six seconds, stacking up to nine. A quick red tongue grabs vulnerable flies up to two pellets ahead. Hunt them for 100, 200, 300, then 400 points. Fruit is optional bonus food."
     },
     {
       "title": "Small feet. Big appetite.",
-      "body": "A round, outline-free frog chomps sideways and looks up or down with a full, simple body. Tiny ball-shaped feet scramble only while moving. Violet flies pursue directly, pink flies anticipate your heading, and cyan Roamers mix pursuit with wandering. Flies stay on the same trails, even after food is eaten."
+      "body": "Tiny ball-shaped feet scramble only while moving. Violet flies pursue directly, pink flies anticipate your heading, and cyan Roamers mix pursuit with wandering. Flies occasionally escape between pipes, but stay inside the visible playfield."
     },
     {
       "title": "The DOM carries the trails.",
-      "body": "Eaten squares leave a faint grey trail. Regular food returns after 12 seconds and power food after 20, using the simulation clock and the same SVG nodes. Real text stays mutated until Recall. Trails and characters live inside the content root, so native scrolling and transforms carry them with the page."
+      "body": "Pellets twinkle independently and eaten squares leave a faint grey trail. Food returns on the simulation clock using the same SVG nodes. Pipes stay stable during play: scrolling, resizing, a new wave, or Refresh maze redraws them. Native scrolling carries everything with the page; real text stays mutated until Recall."
     }
   ],
   "code": "const game = createByteRunner({\n  root: \"main\",\n  textSelector: \"h1, h2, p, li\",\n  targetSelector: \"[data-gate]\",\n  theme: \"system\",\n});\ngame.start();\n// Later: game.destroy();",
   "importLine": "import { createByteRunner } from \"@coded-design/byte-runner\";",
   "engine": "Shared TypeScript runtime",
-  "extra": "Three lives. Eat every square once to clear a level. Three flies arrive immediately, building to six on the first level and up to twelve later. Recall removes the creatures and food and restores game-owned text edits.",
+  "extra": "Three lives. Eat every square once to clear a level. Up to five flies arrive immediately, building toward nine on the first level and twelve later where space permits. Recall removes game-owned creatures, food, and text edits.",
   "sourcePaths": [
     "src/art.ts",
     "src/maze.ts",

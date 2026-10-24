@@ -24,6 +24,7 @@ interface Fly extends Actor {
 }
 export declare function createPresentation(api: GameContext): {
     measure: () => Frame;
+    geometryKey: () => string;
     visible(show: boolean): void;
     mount: (maze: Maze, next: Frame) => void;
     viewport: (p: Point) => Point;

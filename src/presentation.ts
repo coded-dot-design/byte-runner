@@ -65,17 +65,19 @@ export function createPresentation(api: GameContext) {
     origin = { x: 0, y: 0 };
   let runner: SVGGElement,
     pose: SVGGElement,
+    tongue: SVGPathElement,
     torso: SVGGElement,
     body: SVGPathElement,
     stems: SVGPathElement,
     cream: SVGPathElement,
     pupils: SVGPathElement,
     feet: SVGPathElement,
-    foodLayer: SVGGElement,
     fruit: SVGGElement,
     flyLayer: SVGGElement;
   let pellets: SVGElement[] = [],
-    flyScale = 1.1;
+    flyScale = 1.1,
+    foodFrame = -1;
+  let powerRings: (SVGElement | null)[] = [];
   const flies = new Map<
     number,
     {
@@ -85,6 +87,23 @@ export function createPresentation(api: GameContext) {
       pupils: SVGPathElement;
     }
   >();
+  // Cheap viewport identity excludes animated text, buttons and our own mutations.
+  function geometryKey() {
+    const r = host.getBoundingClientRect(),
+      win = doc.defaultView!;
+    return [
+      r.left,
+      r.top,
+      Math.min(r.right, api.width),
+      Math.min(r.bottom, api.height),
+      api.width,
+      api.height,
+      win.scrollX,
+      win.scrollY,
+    ]
+      .map((n) => Math.round(n))
+      .join(",");
+  }
   function measure(): Frame {
     const box = host.getBoundingClientRect(),
       scaleX = box.width / (host.clientWidth || box.width) || 1,
@@ -115,7 +134,7 @@ export function createPresentation(api: GameContext) {
       root!.querySelectorAll("[data-byte-wall]"),
     );
     const hud = doc.querySelector("[data-dom-virus-root]")?.shadowRoot;
-    for (const el of hud?.querySelectorAll(".hud,.dpad") ?? [])
+    for (const el of hud?.querySelectorAll(".hud,.dpad,.abilities") ?? [])
       explicit.add(el);
     const targets = new Set<Element>([
       ...api.board.targets.map((t) => t.element).filter(Boolean),
@@ -219,7 +238,7 @@ export function createPresentation(api: GameContext) {
     // The center stays transparent, with no crossbars across route junctions.
     if (!runner)
       svg.innerHTML =
-        '<defs><mask id="byte-trail-edge" maskUnits="userSpaceOnUse"><g fill="none" stroke-linecap="round" stroke-linejoin="round"><path data-byte-edge-outer stroke="white"/><path data-byte-edge-inner stroke="black"/></g></mask></defs><path data-byte-guides fill="none" stroke-linecap="round" stroke-linejoin="round" mask="url(#byte-trail-edge)"/><g data-byte-food shape-rendering="crispEdges"></g><g data-byte-fruit visibility="hidden" shape-rendering="crispEdges"></g><g data-byte-flies></g><g data-byte-runner><g transform="scale(1.2) translate(-12 -15)"><g data-byte-pose shape-rendering="crispEdges"><path data-byte-feet/><g data-byte-torso><path data-byte-body/><g data-byte-eyes><path data-stems/><path data-cream/><path data-pupils/></g></g></g></g></g>';
+        '<defs><mask id="byte-trail-edge" maskUnits="userSpaceOnUse"><g fill="none" stroke-linecap="round" stroke-linejoin="round"><path data-byte-edge-outer stroke="white"/><path data-byte-edge-inner stroke="black"/></g></mask></defs><path data-byte-guides fill="none" stroke-linecap="round" stroke-linejoin="round" mask="url(#byte-trail-edge)"/><g data-byte-food shape-rendering="crispEdges"></g><g data-byte-fruit visibility="hidden" shape-rendering="crispEdges"></g><g data-byte-flies></g><g data-byte-runner><path data-byte-tongue fill="none" stroke="#ee526a" stroke-width="4" stroke-linecap="round"/><g transform="scale(1.2) translate(-12 -15)"><g data-byte-pose shape-rendering="crispEdges"><path data-byte-feet/><g data-byte-torso><path data-byte-body/><g data-byte-eyes><path data-stems/><path data-cream/><path data-pupils/></g></g></g></g></g>';
     const dark =
       api.options.theme === "dark" ||
       (api.options.theme !== "light" &&
@@ -244,9 +263,9 @@ export function createPresentation(api: GameContext) {
     const guides = svg.querySelector("[data-byte-guides]")!;
     set(guides, "stroke", dark ? "#b1a1e8" : "#8573bb");
     set(guides, "opacity", dark ? ".25" : ".32");
-    const food = (foodLayer =
-      svg.querySelector<SVGGElement>("[data-byte-food]")!);
+    const food = svg.querySelector<SVGGElement>("[data-byte-food]")!;
     food.replaceChildren();
+    foodFrame = -1;
     pellets = maze.pellets.map((p) => {
       const n = doc.createElementNS(NS, p.power ? "g" : "rect");
       n.setAttribute(
@@ -258,7 +277,7 @@ export function createPresentation(api: GameContext) {
         const halo = Math.min(14, maze.radius),
           glow = Math.min(10, maze.radius - 1),
           core = Math.min(7, maze.radius - 2);
-        n.innerHTML = `<rect x="${-halo}" y="${-halo}" width="${halo * 2}" height="${halo * 2}" fill="#f4457a" opacity=".1"/><rect x="${-glow}" y="${-glow}" width="${glow * 2}" height="${glow * 2}" fill="#f4457a" opacity=".24"/><rect x="${-core}" y="${-core}" width="${core * 2}" height="${core * 2}" fill="#f4457a"/>`;
+        n.innerHTML = `<rect data-pulse x="${-halo}" y="${-halo}" width="${halo * 2}" height="${halo * 2}" fill="#f4457a" opacity=".1"/><rect x="${-glow}" y="${-glow}" width="${glow * 2}" height="${glow * 2}" fill="#f4457a" opacity=".24"/><rect x="${-core}" y="${-core}" width="${core * 2}" height="${core * 2}" fill="#f4457a"/>`;
       } else {
         n.setAttribute("x", String(p.x - 2));
         n.setAttribute("y", String(p.y - 2));
@@ -274,6 +293,10 @@ export function createPresentation(api: GameContext) {
       food.append(n);
       return n;
     });
+    powerRings = pellets.map((n) =>
+      n.querySelector<SVGElement>("[data-pulse]"),
+    );
+    tongue = svg.querySelector("[data-byte-tongue]")!;
     runner = svg.querySelector("[data-byte-runner]")!;
     pose = svg.querySelector("[data-byte-pose]")!;
     torso = svg.querySelector("[data-byte-torso]")!;
@@ -321,9 +344,30 @@ export function createPresentation(api: GameContext) {
     set(
       pose,
       "transform",
-      facing === 2 ? "translate(24 0) scale(-1 1)" : "translate(0 0)",
+      facing === 2
+        ? `translate(24 ${animation.jumping ? -3 : 0}) scale(-1 1)`
+        : `translate(0 ${animation.jumping ? -3 : 0})`,
     );
     set(pose, "data-facing", String(facing));
+    set(runner, "data-jumping", String(animation.jumping));
+    const grab = animation.tongue && api.time < animation.tongueUntil;
+    const nibble = api.time < animation.chompUntil;
+    const vectors = [
+        [1, 0],
+        [0, 1],
+        [-1, 0],
+        [0, -1],
+      ],
+      [dx, dy] = vectors[facing]!;
+    set(tongue, "visibility", grab || nibble ? "visible" : "hidden");
+    set(
+      tongue,
+      "d",
+      grab
+        ? `M${dx! * 8},${dy! * 8 + 2}L${(animation.tongue!.x - player.x).toFixed(1)},${(animation.tongue!.y - player.y).toFixed(1)}`
+        : `M${dx! * 8},${dy! * 8 + 2}l${dx! * 10},${dy! * 10}`,
+    );
+
     set(torso, "transform", `translate(0 ${f.bob})`);
     set(body, "d", pixels.body);
     set(body, "data-mouth", String(f.mouth));
@@ -354,14 +398,34 @@ export function createPresentation(api: GameContext) {
             : "1"
         : "1",
     );
-    // One quantized pulse for the entire food layer; no per-pellet animations.
-    set(
-      foodLayer,
-      "opacity",
-      api.reducedMotion
-        ? "1"
-        : ["1", ".85", ".7", ".85"][Math.floor(api.time * 2) % 4]!,
-    );
+    // One bounded, quantized update on the simulation clock. No CSS timers or RAFs.
+    const tick = api.reducedMotion ? -2 : Math.floor(api.time * 8);
+    if (tick !== foodFrame) {
+      foodFrame = tick;
+      for (let i = 0; i < pellets.length; i++) {
+        const node = pellets[i]!,
+          ring = powerRings[i];
+        const eaten = node.getAttribute("data-eaten") === "true";
+        const phase = ((tick + i * 13) % 19) / 19;
+        // Stable per-pellet phases and periods give sparse, irregular twinkles.
+        const dim = !api.reducedMotion && (tick + i * 37) % (17 + (i % 13)) < 2;
+        set(node, "opacity", eaten ? ".3" : ring || !dim ? "1" : ".35");
+        if (ring) {
+          set(
+            ring,
+            "transform",
+            `scale(${eaten || api.reducedMotion ? 1 : (0.6 + phase * 0.8).toFixed(2)})`,
+          );
+          set(
+            ring,
+            "opacity",
+            eaten || api.reducedMotion
+              ? ".15"
+              : (0.55 * (1 - phase)).toFixed(2),
+          );
+        }
+      }
+    }
     const alive = new Set<number>();
     for (const g of enemies) {
       alive.add(g.id);
@@ -440,6 +504,7 @@ export function createPresentation(api: GameContext) {
   }
   return {
     measure,
+    geometryKey,
     visible(show: boolean) {
       set(svg, "visibility", show ? "visible" : "hidden");
     },

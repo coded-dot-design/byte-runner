@@ -27,7 +27,7 @@ The page defaults to your system color scheme, with persistent light/dark overri
 
 **The page is the game board.** A small, independent MIT-licensed DOM arcade game in the DOM VIRUS collection.
 
-Food trails follow real UI whitespace and gutters, with small pixel squares, larger glowing power squares, and fruit. The round green frog can leave the trails to eat real page letters; only explicitly marked walls and controls block it. Clear food for a 500 × level bonus. Power makes flies edible for six seconds (stacking to nine). Three lives. Three flies arrive immediately, building to six on the first level and up to twelve later.
+Food trails follow real UI whitespace and gutters, with small pixel squares, larger glowing power squares, and fruit. The round green frog can leave the trails to eat real page letters; only explicitly marked walls and controls block it. Clear food for a 500 × level bonus. Power makes flies edible for six seconds (stacking to nine). Three lives. Up to five flies arrive immediately, building toward nine on the first level and twelve later where space permits.
 
 ## Run locally
 
@@ -113,7 +113,7 @@ Set `playing` from a user action. The adapter mounts only in an effect, destroys
 
 ## Controls
 
-Arrows/WASD or the touch D-pad: choose a direction. The frog moves freely while a direction is held, with the last pressed direction winning. Flies stay on the trails. Eat each small and glowing pellet once to clear a level. Eaten food leaves a grey trail and returns after 12 seconds (20 for power); returning food scores without resetting level progress. Real letters do not regenerate. Fruit is optional bonus food, not a power-up.
+Arrows/WASD or the touch D-pad: choose a direction. The frog sticks to the pipe centerline, queues turns, and carries speed around bends. Space / the Jump button or a quick double-tap releases it anywhere; after a short hop, touching another trail reattaches it. M / Refresh maze rebuilds the pipes. Flies occasionally hop between trails but stay inside the viewport. Power lets the red tongue catch vulnerable flies up to 54 pixels ahead. Eat each small and glowing pellet once to clear a level. Eaten food leaves a grey trail and returns after 12 seconds (20 for power); returning food scores without resetting level progress. Real letters do not regenerate. Fruit is optional bonus food, not a power-up.
 
 **P** pauses/resumes. **G** jumps to a gate. **Escape** or **Recall** exits and restores the page. The HUD can be folded. Focusing a form field pauses play; modifier shortcuts and typing are not captured. Theme follows the system unless overridden. Reduced-motion preference removes particles and decorative pulses.
 
@@ -147,10 +147,10 @@ Frog and fly artwork is owned by `src/art.ts`; builds generate `site/art.json` f
 
 ### Whitespace trails
 
-Food and soft corridor edges keep clear of visible text, native controls and media. The edges are visual guides, not player walls: parallel travel within 12 logical pixels receives a small sideways assist, while perpendicular input freely leaves the path. Flies remain on the connected route graph. Vertical frog poses show its eyes and round body without a mouth cutout.
+Food and soft corridor edges keep clear of visible text, native controls and media. The frog locks to the route centerline until a deliberate jump releases it. Turns queue at junctions and unambiguous bends carry momentum. Flies follow the connected graph with occasional short, viewport-contained escapes to another trail. Maze geometry is stable until scrolling, resizing, a new wave, or an explicit refresh. Vertical frog poses show its eyes and round body without a mouth cutout.
 
 Mark a composite panel with `data-byte-obstacle` to keep food, flies and guide edges around its whole rectangle while the frog remains free to cross it. `data-byte-wall` also blocks the frog.
 
 ### Sound and controls
 
-The scoreboard always keeps sound, pause/resume, minimize/expand and Recall in the same order. Sound uses quiet synthesized effects, starts after a real gesture and can be muted. Pause stops active voices; Recall closes audio and restores the page. Mobile movement and fire remain available while the scoreboard is minimized.
+The scoreboard always keeps sound, pause/resume, minimize/expand and Recall in the same order. Sound uses quiet synthesized effects, starts after a real gesture and can be muted. Pause stops active voices; Recall closes audio and restores the page. Mobile movement, Jump and Refresh maze remain available while the scoreboard is minimized.

@@ -3,6 +3,12 @@ export interface RunnerAnimation {
     moving: boolean;
     runTime: number;
     chompUntil: number;
+    jumping: boolean;
+    tongueUntil: number;
+    tongue: {
+        x: number;
+        y: number;
+    } | null;
 }
 export declare const createRunnerAnimation: () => RunnerAnimation;
 export declare function moveAnimation(state: RunnerAnimation, dx: number, dy: number, dt: number): void;
