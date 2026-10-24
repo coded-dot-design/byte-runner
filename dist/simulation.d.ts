@@ -1,4 +1,4 @@
-import type { GameContext, GameSimulation, GameStats, Player } from './core/index.js';
+import type { GameContext, GameSimulation, GameStats, Player } from "./core/index.js";
 export interface ByteRunnerStats extends GameStats {
     score: number;
     lives: number;
