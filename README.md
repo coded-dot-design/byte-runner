@@ -27,7 +27,7 @@ The page defaults to your system color scheme, with persistent light/dark overri
 
 **The page is the game board.** A small, independent MIT-licensed DOM arcade game in the DOM VIRUS collection.
 
-Eat letters on a real webpage while ghosts emerge from buttons. Every six fresh letters spawns an orb nearby; collect it to stop new ghosts and eat existing ones. Power lasts six seconds and stacks to at most nine. Glitch fruit appears periodically. When power ends, gates reopen and spawning accelerates with each 22-second wave. Three lives; survive for a high score.
+A connected maze of small pellets and glowing power pellets fills the visible content area. Native page buttons and `[data-byte-wall]` elements are walls. Clear the food to earn a 500 × level bonus and advance to a fresh maze; letters along the corridors remain optional edible page content. Power pellets turn ghosts edible for six seconds (stacking to nine). Cherries and strawberries award bonus points. Three lives, three initial ghosts, up to eight on later levels.
 
 ## Run locally
 
@@ -64,7 +64,7 @@ The import is deferred until the player clicks. Keep the MIT license with redist
 ## npm-compatible install
 
 ```sh
-npm install github:coded-dot-design/byte-runner#v0.2.0
+npm install github:coded-dot-design/byte-runner#v0.5.0
 ```
 
 ```js
@@ -95,7 +95,7 @@ With no config, the root is `document.body`; text defaults to h1–h6, p, li, bl
 
 Hits replace characters in the existing DOM Text nodes with literal 0 or 1. There are no canvas replacement letters, cloned text, or per-letter wrappers. The ownership ledger records the original and latest game-written value per node. Recall restores only still-owned values; newer host edits win. Changing a proportional-font letter into a digit can reflow text, so the bounded geometry cache is invalidated and refreshed.
 
-A page with no factories uses edge spawns. Only visible, unclipped factories spawn enemies. Use **G** or **Next gate** to travel to another section; ordinary scrolling remains available.
+Ghosts spawn on reachable corridors far from the player and route through the same maze. Use **G** or **Next gate** to travel to another section; ordinary scrolling remains available. SVG maze tiles, pellets and sprites are attached inside the selected HTML root, so they follow native scrolling and transforms even while paused. The active board adapts after a viewport change while retaining progress, without awarding points or clearing a level. Explicit walls use `[data-byte-wall]`; no pellets are placed in disconnected regions.
 
 ## React
 
@@ -113,7 +113,7 @@ Set `playing` from a user action. The adapter mounts only in an effect, destroys
 
 ## Controls
 
-Arrows/WASD: move in four directions. When holding two directions, the last pressed direction wins. Touch devices receive a D-pad. Eat six new letters to create an orb, then move to the orb to activate it.
+Arrows/WASD or the touch D-pad: choose a direction. The runner keeps moving along the corridor, queues turns until the next valid junction and reverses immediately. The last pressed direction wins. Eat all small and glowing pellets to clear a level. Fruit is optional bonus food, not a power-up.
 
 **P** pauses/resumes. **G** jumps to a gate. **Escape** or **Recall** exits and restores the page. The HUD can be folded. Focusing a form field pauses play; modifier shortcuts and typing are not captured. Theme follows the system unless overridden. Reduced-motion preference removes particles and decorative pulses.
 
@@ -127,9 +127,9 @@ npm run size
 npm run playground:build
 ```
 
-`src/simulation.ts` owns gameplay. `src/rules.ts` owns balance constants. `src/index.ts` exposes the factory. The engine, shared entity pools, factory selection and React lifecycle adapter are maintained once in DOM VIRUS. All engine and game implementation sources use strict TypeScript. Generated declarations preserve game-specific snapshot fields and ship with the package; the browser receives plain JavaScript. This repository includes a generated, versioned `shared/core.js` snapshot with its source fingerprint in `shared/ORIGIN.json`; do not edit that generated file. Builds use the snapshot, so this repo works independently. A sibling `dom-virus` checkout enables live source iteration in Vite. To refresh the engine snapshot, run `npm run sync:games` in that checkout, then rebuild this game. A game build never silently replaces its pinned snapshot. A runtime update never silently changes a released game.
+`src/simulation.ts` owns gameplay, `src/maze.ts` owns connected corridor generation and movement, and `src/presentation.ts` owns native SVG sprites and food. `src/rules.ts` owns balance constants. `src/index.ts` exposes the factory. The engine, shared entity pools, factory selection and React lifecycle adapter are maintained once in DOM VIRUS. All engine and game implementation sources use strict TypeScript. Generated declarations preserve game-specific snapshot fields and ship with the package; the browser receives plain JavaScript. This repository includes a generated, versioned `shared/core.js` snapshot with its source fingerprint in `shared/ORIGIN.json`; do not edit that generated file. Builds use the snapshot, so this repo works independently. A sibling `dom-virus` checkout enables live source iteration in Vite. To refresh the engine snapshot, run `npm run sync:games` in that checkout, then rebuild this game. A game build never silently replaces its pinned snapshot. A runtime update never silently changes a released game.
 
-The regular distribution is budgeted below **18 KB gzip including its runtime**. Runtime entities and geometry work are capped. Tests and Vite never ship in the package. See [shared performance notes](https://github.com/coded-dot-design/dom-virus/blob/main/PERFORMANCE.md) and [reference study](https://github.com/coded-dot-design/dom-virus/blob/main/REFERENCES.md).
+The regular distribution is budgeted below **24 KB gzip including its runtime**. Runtime entities and geometry work are capped: at most 300 maze cells, fewer than 2,000 static food nodes, eight ghosts and one bonus fruit. The increased budget pays for connected maze generation, corridor pathfinding and native DOM presentation. Tests and Vite never ship in the package. See [shared performance notes](https://github.com/coded-dot-design/dom-virus/blob/main/PERFORMANCE.md) and [reference study](https://github.com/coded-dot-design/dom-virus/blob/main/REFERENCES.md).
 
 ## First-cut support
 

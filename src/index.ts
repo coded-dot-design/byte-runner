@@ -18,7 +18,7 @@ export function createByteRunner(
       id: "byte-runner",
       title: "BYTE RUNNER",
       color: "#4bce82",
-      hint: "Arrows / WASD · Eat 6 letters to spawn an orb · G: next gate",
+      hint: "Arrows / WASD · Follow the pellets · Clear the maze · G: next area",
       create: createGame,
     },
     { targetEffects: "liquid", ...options, controls: "keyboard" },

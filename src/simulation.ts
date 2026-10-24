@@ -1,324 +1,202 @@
-import type {
-  GameContext,
-  GameSimulation,
-  GameStats,
-  Player,
-  Point,
-} from "@coded-design/dom-virus";
-interface Ghost extends Point {
-  age: number;
-  kind: number;
-  phase: number;
-}
-interface Pickup extends Point {
-  kind: "orb" | "fruit";
-  life: number;
-}
-export interface ByteRunnerStats extends GameStats {
-  score: number;
-  lives: number;
-  wave: number;
-  eaten: number;
-  power: number;
-  alive: number;
-  pickups: number;
-  player: Player;
-  detail: string;
-}
-import {
-  clamp,
-  distance,
-  EntityPool,
-  chooseSpawn,
-  translateEntities,
-} from "@coded-design/dom-virus";
-import { MAX_GHOSTS, spawnInterval, earnsOrb, extendPower } from "./rules.js";
+import type { GameContext, GameSimulation, GameStats, Player } from '@coded-design/dom-virus';
+import { seededRandom } from '@coded-design/dom-virus';
+import { actorAt, advance, closest, direction, distances, makeMaze, opposite, reverse } from './maze.js';
+import type { Actor, Maze, Pellet, Point } from './maze.js';
+import { createPresentation } from './presentation.js';
+import type { Frame } from './presentation.js';
+import { MAX_GHOSTS, extendPower } from './rules.js';
 
+interface Ghost extends Actor { kind: number }
+interface Fruit extends Point { kind: number; life: number }
+export interface ByteRunnerStats extends GameStats {
+  score: number; lives: number; wave: number; eaten: number; power: number;
+  alive: number; pickups: number; player: Player; detail: string;
+  pellets: number; pelletsRemaining: number; pelletsTotal: number; powerPellets: number;
+}
 export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
-  let player: Player = { x: 0, y: 0, angle: 0 };
-  const ghostPool = new EntityPool<Ghost>(MAX_GHOSTS, () => ({
-    x: 0,
-    y: 0,
-    age: 0,
-    kind: 0,
-    phase: 0,
-  }));
-  const pickupPool = new EntityPool<Pickup>(4, () => ({
-    x: 0,
-    y: 0,
-    kind: "orb",
-    life: 0,
-  }));
-  const ghosts = ghostPool.active,
-    pickups = pickupPool.active;
-  const old: Point = { x: 0, y: 0 };
-  let score = 0,
-    lives = 3,
-    wave = 1,
-    eaten = 0,
-    power = 0,
-    spawnIn = 2,
-    fruitIn = 14,
-    shield = 2,
-    combo = 0;
+  const view = createPresentation(api);
+  const seed = Math.floor(api.random() * 0x7fffffff);
+  let maze: Maze, frame: Frame, player: Actor | null = null;
+  let ghosts: Ghost[] = [], fruit: Fruit | null = null;
+  let score = 0, lives = 3, wave = 1, eaten = 0, power = 0, shield = 2.5, combo = 0;
+  let remaining = 0, collected = 0, total = 0, powerEaten = 0;
+  let requested = -1, transition = 0, spawnIn = 2.5, fruitIn = 14, fruitCount = 0;
+  let geometryIn = 0, pendingKey = '', chaseIn = 0;
+  let fields: Int16Array[] = [];
   let sealDuration = 6;
-  const reset = () => {
-    player = { x: api.width * 0.45, y: api.height * 0.45, angle: 0 };
-    ghostPool.clear();
-    pickupPool.clear();
-    api.board.resetTargets(100);
-    score = 0;
-    lives = 3;
-    wave = 1;
-    eaten = 0;
-    power = 0;
-    spawnIn = 2;
-    fruitIn = 14;
-    shield = 2;
-    combo = 0;
-  };
-  function spawn() {
-    if (ghosts.length >= MAX_GHOSTS) return;
-    const spawn = chooseSpawn(api.board.targets, api.random, api.width, 16);
-    if (!spawn) return;
-    const g = ghostPool.acquire();
-    if (!g) return;
-    Object.assign(g, {
-      x: spawn.x,
-      y: spawn.y,
-      age: 0,
-      kind: Math.floor(api.random() * 3),
-      phase: api.random() * 6.28,
-    });
-    api.emit("spawn", { target: spawn.target?.id });
+  let food = new Map<string, Pellet[]>();
+  const bin = (p: Point) => `${Math.floor(p.x / 36)},${Math.floor(p.y / 36)}`;
+  const event = (type: string, data: Record<string, unknown> = {}) => api.emit(type, data);
+  function generate(preserve = false, nextFrame = view.measure()) {
+    const oldRemaining = remaining, oldTotal = maze?.pellets.length || 1;
+    const oldGhostCount = ghosts.length, oldFruit = fruit;
+    const nextMaze = makeMaze(nextFrame.width, nextFrame.height, nextFrame.walls, seededRandom(seed + wave * 7919));
+    // A temporarily occluded root must not count as a cleared level.
+    if (nextMaze.cells.length < 2) {
+      if (!maze) { maze = nextMaze; frame = nextFrame; view.mount(maze, frame); }
+      return false;
+    }
+    maze = nextMaze; frame = nextFrame;
+    if (preserve) {
+      const target = Math.max(1, Math.round(maze.pellets.length * oldRemaining / oldTotal));
+      // Spread remaining food evenly. A scroll/resize never scores or refills a level.
+      const powers = maze.pellets.filter(p => p.power);
+      powers.slice(0, powerEaten).forEach(p => { p.eaten = true; });
+      const ordinary = maze.pellets.filter(p => !p.power);
+      const keep = Math.max(0, target - powers.filter(p => !p.eaten).length);
+      ordinary.forEach((p, i) => { p.eaten = Math.floor((i + 1) * keep / ordinary.length) === Math.floor(i * keep / ordinary.length); });
+    } else { collected = 0; powerEaten = 0; fruitCount = 0; fruitIn = 14; }
+    remaining = maze.pellets.filter(p => !p.eaten).length;
+    total = collected + remaining;
+    food = new Map();
+    for (const p of maze.pellets) if (!p.eaten) { const key = bin(p); const group = food.get(key) ?? []; group.push(p); food.set(key, group); }
+    player = actorAt(maze, maze.start); requested = -1;
+    ghosts = []; fruit = null; spawnIn = 2.5; shield = Math.max(shield, preserve ? .6 : 2); chaseIn = 0;
+    if (preserve) {
+      for (let i = 0; i < oldGhostCount; i++) spawnGhost();
+      if (oldFruit) { const cell = maze.cells[closest(maze, oldFruit)]!; fruit = { ...oldFruit, x: cell.x, y: cell.y }; }
+    }
+    view.mount(maze, frame); view.syncPosition();
+    event(preserve ? 'maze-reflow' : 'level-start', { wave, pellets: remaining, walls: frame.walls.length });
+    return true;
   }
-  function pickup(kind: Pickup["kind"] = "orb") {
-    const item = pickupPool.acquire();
-    if (!item) return;
-    const angle = api.random() * Math.PI * 2;
-    Object.assign(item, {
-      x: clamp(player.x + Math.cos(angle) * 70, 25, api.width - 25),
-      y: clamp(player.y + Math.sin(angle) * 70, 80, api.height - 25),
-      kind,
-      life: 12,
-    });
-    api.emit("pickup-spawn", { kind });
+  function reset() {
+    score = 0; lives = 3; wave = 1; eaten = 0; power = 0; shield = 2.5; combo = 0;
+    remaining = 0; collected = 0; total = 0; powerEaten = 0; transition = 0;
+    geometryIn = 0; pendingKey = ''; fruitCount = 0;
+    api.board.resetTargets(100);
+    generate();
+  }
+  function collect(point: Point) {
+    const x = Math.floor(point.x / 36), y = Math.floor(point.y / 36);
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (const p of food.get(`${x + dx},${y + dy}`) ?? []) {
+      if (p.eaten || Math.hypot(p.x - point.x, p.y - point.y) > 10) continue;
+      p.eaten = true; remaining--; collected++; score += p.power ? 50 : 10; view.eat(p.id);
+      if (p.power) {
+        powerEaten++; power = extendPower(power); sealDuration = power; combo = 0;
+        ghosts.forEach(g => reverse(maze, g));
+        const at = view.viewport(p); api.burst(at.x, at.y, '#f4457a', 10);
+        event('power', { seconds: power });
+      }
+      event('pellet', { remaining, power: p.power, score });
+    }
+    // Letters are optional bonus food along the actual corridor, never replaced sprites.
+    const at = view.viewport(point);
+    let consumed = 0;
+    for (const glyph of api.board.near(at.x, at.y, 9)) {
+      if (consumed >= 2) break;
+      if (api.board.consume(glyph, 'binary')) { eaten++; score += 5; consumed++; event('letter', { eaten, score }); }
+    }
+    if (fruit && Math.hypot(fruit.x - point.x, fruit.y - point.y) < 18) {
+      const bonus = (fruit.kind ? 300 : 100) * wave; score += bonus;
+      api.popup(at.x, at.y, `+${bonus}`, 'score'); fruit = null; event('fruit', { score });
+    }
+  }
+  function spawnGhost() {
+    if (!player || ghosts.length >= Math.min(MAX_GHOSTS, 3 + Math.floor((wave - 1) / 2))) return;
+    const field = distances(maze, player.to);
+    const far = maze.cells.filter(c => field[c.id]! >= Math.max(4, Math.max(...field) * .55));
+    if (!far.length) return;
+    const cell = far[Math.floor(api.random() * far.length)]!;
+    ghosts.push({ ...actorAt(maze, cell.id), kind: ghosts.length % 3 });
+    event('spawn');
+  }
+  function inputDirection() {
+    let value = -1;
+    for (const key of api.input.keys) {
+      if (key === 'ArrowRight' || key === 'KeyD') value = 0;
+      if (key === 'ArrowDown' || key === 'KeyS') value = 1;
+      if (key === 'ArrowLeft' || key === 'KeyA') value = 2;
+      if (key === 'ArrowUp' || key === 'KeyW') value = 3;
+    }
+    if (value < 0 && api.input.mode === 'mouse' && api.input.pointer.active && player) value = direction(view.viewport(player), api.input.pointer);
+    return value;
   }
   function update(dt: number) {
-    old.x = player.x;
-    old.y = player.y;
-    api.move(player, dt, 260, true); // Last pressed direction wins; no diagonal shortcuts.
+    geometryIn -= dt;
+    if (geometryIn <= 0) {
+      geometryIn = .18;
+      const next = view.measure();
+      if (next.key !== frame.key) {
+        if (pendingKey === next.key) { generate(!!player, next); pendingKey = ''; }
+        else pendingKey = next.key;
+      } else pendingKey = '';
+    }
+    view.syncPosition();
+    if (!player || maze.cells.length < 2) return;
+    if (transition > 0) {
+      transition -= dt;
+      if (transition <= 0) { wave++; power = 0; generate(); }
+      return;
+    }
     shield = Math.max(0, shield - dt);
-    const before = power;
+    const wasPowered = power > 0;
     power = Math.max(0, power - dt);
-    wave = 1 + Math.floor(api.time / 22);
-    if (before > 0 && power === 0) {
-      spawnIn = 0.7;
-      combo = 0;
-      api.emit("power-end");
+    if (wasPowered && power === 0) { combo = 0; event('power-end'); }
+    const nextDirection = inputDirection();
+    if (nextDirection >= 0) requested = nextDirection;
+    if (requested >= 0 && requested === opposite(player.direction) && player.from !== player.to) reverse(maze, player);
+    advance(maze, player, Math.min(220, 155 + wave * 6) * dt, cell => {
+      const wanted = cell.exits.find(id => direction(cell, maze.cells[id]!) === requested);
+      return wanted ?? cell.exits.find(id => direction(cell, maze.cells[id]!) === player!.direction);
+    }, collect);
+    if (!remaining) {
+      transition = 1.25; score += 500 * wave;
+      const at = view.viewport(player); api.popup(at.x, at.y, `LEVEL ${wave} CLEAR +${500 * wave}`, 'upgrade');
+      event('level-clear', { wave, score }); return;
     }
-    // Sample movement so a low frame rate cannot skip a line of edible text.
-    const steps = Math.max(1, Math.ceil(distance(old, player) / 7));
-    let consumed = 0;
-    for (let s = 1; s <= steps; s++)
-      for (const g of api.board.near(
-        old.x + ((player.x - old.x) * s) / steps,
-        old.y + ((player.y - old.y) * s) / steps,
-        7,
-      )) {
-        if (consumed >= 6) break;
-        if (g.rect && api.board.consume(g, "binary")) {
-          eaten++;
-          score += 10;
-          consumed++;
-          api.burst(
-            g.rect.left + g.rect.width / 2,
-            g.rect.top + g.rect.height / 2,
-            "#4bce82",
-            3,
-          );
-          if (earnsOrb(eaten)) pickup();
-          api.emit("letter", { eaten, score });
-        }
-      }
     fruitIn -= dt;
-    if (fruitIn <= 0) {
-      fruitIn = 18;
-      pickup("fruit");
+    const progress = collected / Math.max(1, total);
+    if (!fruit && fruitCount < 2 && (fruitIn <= 0 || progress >= (fruitCount ? .7 : .3))) {
+      const choices = maze.cells.filter(c => c.id !== player!.from);
+      const cell = choices[Math.floor(api.random() * choices.length)];
+      if (cell) { fruit = { x: cell.x, y: cell.y, kind: fruitCount, life: 18 }; fruitCount++; fruitIn = 22; event('pickup-spawn', { kind: 'fruit' }); }
     }
-    for (let i = pickups.length - 1; i >= 0; i--) {
-      const p = pickups[i]!;
-      p.life -= dt;
-      if (distance(player, p) < 23) {
-        power = extendPower(power);
-        sealDuration = power;
-        for (const gate of api.board.targets)
-          api.board.damage(gate, gate.health);
-        score += p.kind === "fruit" ? 100 : 25;
-        pickupPool.releaseAt(i);
-        api.burst(p.x, p.y, "#4bce82", 12);
-        api.emit("power", { seconds: power });
-      } else if (p.life <= 0) pickupPool.releaseAt(i);
-    }
-    // The real button fill is the gate lock timer: empty while newly sealed,
-    // refilling as overclock expires. Spawning resumes only when fully open.
-    for (const gate of api.board.targets)
-      gate.health = power > 0 ? 100 * (1 - power / sealDuration) : 100;
-    if (power <= 0) {
-      spawnIn -= dt;
-      if (spawnIn <= 0) {
-        spawnIn = spawnInterval(wave);
-        for (let i = 0; i < Math.min(3, 1 + Math.floor(wave / 3)); i++) spawn();
-      }
+    if (fruit) { fruit.life -= dt; if (fruit.life <= 0) fruit = null; }
+    if (!power) { spawnIn -= dt; if (spawnIn <= 0) { spawnGhost(); spawnIn = 2.2; } }
+    // These are the actual gate buttons: their native fill reflects power time.
+    for (const gate of api.board.targets) gate.health = power > 0 ? 100 * (1 - power / sealDuration) : 100;
+    chaseIn -= dt;
+    if (chaseIn <= 0) {
+      chaseIn = .2;
+      let ahead = player.to;
+      for (let n = 0; n < 3; n++) ahead = maze.cells[ahead]!.exits.find(id => direction(maze.cells[ahead]!, maze.cells[id]!) === player!.direction) ?? ahead;
+      fields = [distances(maze, player.to), distances(maze, ahead)];
     }
     for (let i = ghosts.length - 1; i >= 0; i--) {
-      const g = ghosts[i]!;
-      g.age += dt;
-      const aimX = player.x + (g.kind === 1 ? Math.cos(player.angle) * 60 : 0),
-        aimY = player.y + (g.kind === 1 ? Math.sin(player.angle) * 60 : 0);
-      let a = Math.atan2(aimY - g.y, aimX - g.x);
-      if (power > 0) a += Math.PI;
-      const speed = power > 0 ? 65 : Math.min(205, 55 + wave * 9 + g.kind * 10);
-      g.x += Math.cos(a) * speed * dt;
-      g.y += Math.sin(a) * speed * dt;
-      if (power > 0) {
-        g.x = clamp(g.x, 14, api.width - 14);
-        g.y = clamp(g.y, 14, api.height - 14);
-      }
-      if (distance(player, g) < 23) {
+      const g = ghosts[i]!, field = fields[g.kind === 1 ? 1 : 0]!;
+      advance(maze, g, (power ? 78 : Math.min(170, 90 + wave * 5 + g.kind * 5)) * dt, cell => {
+        const forward = cell.exits.filter(id => direction(cell, maze.cells[id]!) !== opposite(g.direction));
+        const choices = forward.length ? forward : cell.exits;
+        if (g.kind === 2 && !power && api.random() < .2) return choices[Math.floor(api.random() * choices.length)];
+        return choices.slice().sort((a, b) => power ? field[b]! - field[a]! : field[a]! - field[b]!)[0];
+      });
+      if (Math.hypot(player.x - g.x, player.y - g.y) < 20) {
+        const at = view.viewport(g);
         if (power > 0) {
-          combo++;
-          score += 100 * Math.min(combo, 4);
-          api.burst(g.x, g.y, "#8573ee", 12);
-          ghostPool.releaseAt(i);
-          api.emit("ghost-eaten", { score, combo });
+          combo++; const value = 100 * Math.min(combo, 4); score += value;
+          ghosts.splice(i, 1); api.popup(at.x, at.y, `+${value}`, 'score'); event('ghost-eaten', { score, combo });
         } else if (shield <= 0) {
-          lives--;
-          shield = 2.5;
-          api.burst(player.x, player.y, "#ee6875", 15);
-          ghostPool.releaseAt(i);
-          api.emit("hurt", { lives });
-          if (lives <= 0) {
-            api.finish();
-            return;
-          }
+          lives--; event('hurt', { lives }); api.burst(at.x, at.y, '#ee6875', 12);
+          if (lives <= 0) { api.finish(); return; }
+          player = actorAt(maze, maze.start); requested = -1; ghosts = []; shield = 2.5; spawnIn = 2.5; break;
         }
-      } else if (
-        g.y < -api.height ||
-        g.y > api.height * 2 ||
-        g.x < -api.width ||
-        g.x > api.width * 2
-      ) {
-        ghostPool.releaseAt(i);
       }
     }
-  }
-  function draw(ctx: CanvasRenderingContext2D) {
-    for (const p of pickups) {
-      ctx.save();
-      ctx.translate(p.x, p.y);
-      ctx.fillStyle = p.kind === "fruit" ? "#f4457a" : "#4bce82";
-      ctx.strokeStyle = "#142522";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      if (p.kind === "fruit") {
-        ctx.moveTo(0, -12);
-        ctx.lineTo(11, 0);
-        ctx.lineTo(0, 12);
-        ctx.lineTo(-11, 0);
-        ctx.closePath();
-      } else
-        ctx.arc(
-          0,
-          0,
-          9 + (api.reducedMotion ? 0 : Math.sin(api.time * 5)),
-          0,
-          Math.PI * 2,
-        );
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
-    }
-    for (const g of ghosts) {
-      ctx.save();
-      ctx.translate(g.x, g.y);
-      ctx.fillStyle =
-        power > 0
-          ? "#628dce"
-          : (["#8573ee", "#f4457a", "#06c4ff"][g.kind] ?? "#8573ee");
-      ctx.strokeStyle = "#191627";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(-12, 11);
-      ctx.lineTo(-12, -2);
-      ctx.quadraticCurveTo(-12, -15, 0, -15);
-      ctx.quadraticCurveTo(12, -15, 12, -2);
-      ctx.lineTo(12, 11);
-      for (let x = 12; x >= -12; x -= 6)
-        ctx.lineTo(
-          x,
-          8 + (api.reducedMotion ? 2 : Math.sin(g.age * 8 + x) * 3),
-        );
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = "#0c1530";
-      ctx.fillRect(-6, -5, 4, 5);
-      ctx.fillRect(3, -5, 4, 5);
-      ctx.restore();
-    }
-    ctx.save();
-    ctx.translate(player.x, player.y);
-    ctx.rotate(player.angle);
-    if (shield > 0 || power > 0) {
-      ctx.strokeStyle = power > 0 ? "#4bce82" : "#fff";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(0, 0, 24, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    const jaw = api.reducedMotion
-      ? 4
-      : 3 + Math.abs(Math.sin(api.time * 11)) * 7;
-    ctx.fillStyle = power > 0 ? "#cdde00" : "#4bce82";
-    ctx.strokeStyle = "#13271d";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(-16, 0);
-    ctx.lineTo(0, -16);
-    ctx.lineTo(16, -jaw);
-    ctx.lineTo(1, 0);
-    ctx.lineTo(16, jaw);
-    ctx.lineTo(0, 16);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "#13271d";
-    ctx.fillRect(-3, -10, 3, 3);
-    ctx.restore();
   }
   return {
-    reset,
-    update,
-    draw,
-    scroll(dx, dy) {
-      translateEntities(ghosts, dx, dy);
-      translateEntities(pickups, dx, dy);
-    },
+    reset, update,
+    draw() { view.render(player, ghosts, power, shield, fruit); },
+    // The maze, food and actors are descendants of the page root. Scroll is native.
     snapshot() {
+      const at = player ? view.viewport(player) : { x: 0, y: 0 };
       return {
-        score,
-        lives,
-        wave,
-        eaten,
-        power,
-        alive: ghosts.length,
-        pickups: pickups.length,
-        player: { ...player },
-        detail:
-          power > 0
-            ? `OVERCLOCK ${power.toFixed(1)}s · Gates sealed · Eat ghosts`
-            : `${eaten % 6}/6 LETTERS → ORB · Arrows / WASD to move`,
+        score, lives, wave, eaten, power, alive: ghosts.length,
+        pickups: (maze?.pellets.filter(p => p.power && !p.eaten).length ?? 0) + Number(!!fruit),
+        pellets: collected, pelletsRemaining: remaining, pelletsTotal: total,
+        powerPellets: maze?.pellets.filter(p => p.power && !p.eaten).length ?? 0,
+        player: { ...at, angle: Math.max(0, player?.direction ?? 0) * Math.PI / 2 },
+        detail: !player ? 'Scroll to an open part of the page to build the maze' : transition > 0 ? `LEVEL ${wave} CLEAR · Next maze incoming` : `${remaining} PELLETS LEFT · ${power > 0 ? `POWER ${power.toFixed(1)}s · Hunt ghosts` : 'Arrows / WASD · Follow the dots · Fruit = bonus'}`,
       };
     },
   };

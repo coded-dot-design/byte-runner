@@ -1,5 +1,14 @@
 # 0.3.1
 
+## 0.5.0
+
+- Remove the dark background from native 0/1 highlights while retaining their game color.
+
+- Replace timed free roaming with connected, viewport-filling pellet mazes; native page elements are walls.
+- Add glowing power pellets, bonus cherries/strawberries, queued corridor turns and clear-to-advance levels.
+- Attach the maze, food and simplified pixel sprites inside the real page root; preserve progress when the active view changes.
+- Bound ghosts to eight and increase the complete game budget to 24 KB gzip.
+
 ## 0.4.2
 
 - Neon runner and ghost graphics with bright green binary highlights, palette guide, and active keyboard ownership.

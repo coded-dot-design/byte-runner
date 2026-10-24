@@ -3,25 +3,25 @@
   "author": "Chris Cooley",
   "license": "MIT",
   "name": "Byte Runner",
-  "kind": "DOM CHASE",
-  "tagline": "Eat the page. Flip the chase.",
-  "description": "Read between the lines, then eat them. Collect letters, catch an overclock orb, and turn the ghosts chasing you into points.",
+  "kind": "DOM MAZE CHASE",
+  "tagline": "Follow the dots. Eat the page.",
+  "description": "A pellet-filled maze grows around the page. Chase the trails, grab glowing power pellets, collect fruit, and turn the ghosts into points.",
   "accent": "lime",
   "icon": "runner",
-  "versionNote": "Six letters change everything.",
+  "versionNote": "Clear the dots. Meet the next maze.",
   "controls": [
-    "Arrows / WASD \u2014 cardinal movement",
-    "Mouse \u2014 steer toward the pointer",
-    "P \u2014 pause \u00b7 G \u2014 next gate \u00b7 Esc \u2014 Recall"
+    "Arrows / WASD / touch D-pad \u2014 turn and follow the corridors",
+    "Queue a turn before a junction; reverse at any time",
+    "P \u2014 pause \u00b7 G \u2014 next area \u00b7 Esc \u2014 Recall"
   ],
   "facts": [
     {
-      "value": "6",
-      "label": "letters per orb"
+      "value": "4",
+      "label": "power pellets"
     },
     {
-      "value": "40",
-      "label": "ghost cap"
+      "value": "3",
+      "label": "starting lives"
     },
     {
       "value": "9s",
@@ -29,36 +29,37 @@
     }
   ],
   "loop": [
-    "Eat six letters",
-    "Collect the orb",
-    "Seal the gates",
-    "Hunt the ghosts"
+    "Follow the pellets",
+    "Grab glowing power",
+    "Hunt ghosts + fruit",
+    "Clear the next maze"
   ],
   "chapters": [
     {
-      "title": "The text is the trail.",
-      "body": "The runner turns nearby letters into points and literal 0/1 characters in the existing DOM Text nodes. Movement is sampled every seven pixels so a slow frame does not skip a line of food; at most six fresh letters are consumed per update. Spent digits remain visible but cannot be eaten twice. Recall restores still-owned text."
+      "title": "A maze across the view.",
+      "body": "Small pellets mark connected corridors across the visible page. Buttons and marked page elements become walls. Clear all small and glowing pellets to earn a level bonus and build the next maze. Letters along your route are extra food: eat them into real 0s and 1s."
     },
     {
-      "title": "Overclock reverses the rules.",
-      "body": "Every sixth fresh letter places an orb near the player. Collect it for six seconds of power, stacking up to nine seconds. Fruit starts appearing after fourteen seconds, then every eighteen. While powered, factories pause their spawning and ghosts flee. Collect the power-up itself; eating six letters alone does not activate it."
+      "title": "Big glow. Bigger appetite.",
+      "body": "Glowing pink power pellets turn ghosts blue for six seconds, stacking up to nine. Hunt them for 100, 200, 300, then 400 points. Cherries and strawberries appear on the trails for bonus points; fruit is optional and does not grant power."
     },
     {
-      "title": "Three approaches to pursuit.",
-      "body": "Some ghosts chase your current position. Another kind aims sixty pixels ahead in your direction of travel. Speed grows with time-based waves, capped at 205 pixels per second. Ghost silhouettes and the runner\u2019s opening jaw use small canvas paths; their animation follows the simulation clock."
+      "title": "Classic movement, real page terrain.",
+      "body": "The runner keeps moving down the current corridor. Queue a turn before a junction, or reverse immediately. Ghosts use the same corridor graph, so neither you nor an enemy can cut through a wall. One ghost chases directly, one anticipates your heading, and one mixes pursuit with roaming."
     },
     {
-      "title": "Small, finite, reusable.",
-      "body": "A shared entity pool caps ghosts at forty and uncollected pickups at four. Expired pickups and removed ghosts return their storage for reuse. Keyboard movement selects the most recently pressed axis when directions conflict, keeping the classic four-direction chase feel."
+      "title": "The DOM carries the maze.",
+      "body": "The maze, pellets, fruit, and pixel sprites are native SVG children attached inside your content root. They follow scrolling and transforms even while paused. The active maze adapts to a changed viewport while preserving progress; it never earns points or clears a level by resizing."
     }
   ],
   "code": "const game = createByteRunner({\n  root: \"main\",\n  textSelector: \"h1, h2, p, li\",\n  targetSelector: \"[data-gate]\",\n  theme: \"system\",\n});\ngame.start();\n// Later: game.destroy();",
   "importLine": "import { createByteRunner } from \"@coded-design/byte-runner\";",
   "engine": "Shared TypeScript runtime",
-  "extra": "Three lives. Waves advance every twenty-two seconds. A powered ghost chain awards 100, 200, 300, then 400 points per ghost; spawning resumes after power expires.",
+  "extra": "Three lives. Levels advance by clearing pellets, not by elapsed time. The roster grows from three ghosts toward a cap of eight. Recall removes the maze and restores game-owned text edits.",
   "sourcePaths": [
+    "src/maze.ts",
     "src/simulation.ts",
-    "src/rules.ts",
+    "src/presentation.ts",
     "shared/ORIGIN.json"
   ],
   "characters": [
@@ -66,42 +67,56 @@
       "icon": "runner",
       "name": "Byte Runner",
       "role": "You",
-      "rules": "Move with arrows or the touch D-pad. Eat letters into real 0s and 1s. Every sixth letter drops a power orb.",
-      "color": ""
+      "rules": "Follow the small pellets with arrows or the D-pad. Queue turns at junctions. Clear the maze to advance; letters on your route are bonus food.",
+      "color": "#cdde00"
     },
     {
       "icon": "ghost",
       "name": "Chaser",
       "role": "Direct pursuit",
-      "rules": "The violet ghost heads toward your current position. Without power, contact costs a life.",
+      "rules": "The violet ghost takes a corridor route toward your position. Unpowered contact costs a life.",
       "color": "#8573ee"
     },
     {
       "icon": "ghost",
       "name": "Interceptor",
       "role": "Predictive pursuit",
-      "rules": "The pink ghost aims ahead of your heading. Turn to change its interception point.",
+      "rules": "The pink ghost aims several junctions ahead of your heading. Turn to change its interception point.",
       "color": "#f4457a"
     },
     {
       "icon": "ghost",
-      "name": "Sprinter",
-      "role": "Fast pursuit",
-      "rules": "The cyan ghost follows directly at a higher speed. All ghosts speed up as waves rise.",
+      "name": "Roamer",
+      "role": "Unpredictable pursuit",
+      "rules": "The cyan ghost mixes fast pursuit with roaming at junctions. It obeys the same walls you do.",
       "color": "#06c4ff"
     },
     {
       "icon": "ghost",
       "name": "Vulnerable ghosts",
       "role": "Power window",
-      "rules": "Eat an orb or fruit to seal the gates temporarily. Ghosts turn blue, flee and become edible. Chain catches for increasing points.",
+      "rules": "A glowing power pellet seals the gates temporarily. Blue ghosts flee along the maze and become edible. Chain catches for increasing points.",
       "color": "#628dce"
+    },
+    {
+      "icon": "power",
+      "name": "Power pellet",
+      "role": "Flip the chase",
+      "rules": "The large glowing dots give six seconds of power, capped at nine when stacked. They count toward clearing the maze.",
+      "color": "#f4457a"
+    },
+    {
+      "icon": "fruit",
+      "name": "Bonus fruit",
+      "role": "Extra points",
+      "rules": "Cherries and strawberries appear on the corridors. Catch them before they disappear; they are optional bonus food.",
+      "color": "#f4457a"
     }
   ],
   "palette": [
     {
-      "label": "Runner / bits",
-      "color": "#4bce82"
+      "label": "Runner",
+      "color": "#cdde00"
     },
     {
       "label": "Chaser",
