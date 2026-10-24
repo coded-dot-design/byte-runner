@@ -87,14 +87,13 @@ const game = createByteRunner({
   targetSelector: '[data-virus-target]',
   excludeSelector: '[data-virus-ignore]',
   theme: 'system',
-  domMode: 'visual',
   onState: snapshot => console.log(snapshot.status, snapshot.score),
 });
 ```
 
 With no config, the root is `document.body`; text defaults to h1–h6, p, li, blockquote, and `[data-virus-text]`; targets default to buttons, `[role="button"]`, `a.button`, `a.btn`, and `[data-virus-target]`. Explicit selectors replace those defaults. `root` accepts an element or a CSS selector. Forms, editable fields, dialogs, code, live regions, and game controls remain excluded. Add `data-virus-ignore` to any container you want protected.
 
-Visual mode hides consumed glyph ranges with CSS Highlights and draws effects in the overlay. It preserves host text nodes for React and other frameworks. `domMode: 'text'` intentionally changes text on selected static content and restores owned values on exit; newer host edits are preserved. Do not select dynamic framework text for direct mutation.
+Hits replace characters in the existing DOM Text nodes with literal 0 or 1. There are no canvas replacement letters, cloned text, or per-letter wrappers. The ownership ledger records the original and latest game-written value per node. Recall restores only still-owned values; newer host edits win. Changing a proportional-font letter into a digit can reflow text, so the bounded geometry cache is invalidated and refreshed.
 
 A page with no factories uses edge spawns. Only visible, unclipped factories spawn enemies. Use **G** or **Next gate** to travel to another section; ordinary scrolling remains available.
 
@@ -134,7 +133,7 @@ The regular distribution is budgeted below **18 KB gzip including its runtime**.
 
 ## First-cut support
 
-Modern browsers with Canvas 2D, Shadow DOM, Intl.Segmenter, and CSS Highlights. This cut is tested in Chromium; it is not a claim of universal site or browser compatibility. Visual mode reports unsupported CSS Highlights; static opted-in pages can explicitly choose text mode. Cross-origin iframes and closed shadow roots are outside the board. Public launcher and Chrome extension are future work.
+Modern browsers with Canvas 2D, Shadow DOM and Intl.Segmenter. CSS Highlights are optional and only fade already-mutated digits. Text replacement and Recall work without that API. Cross-origin frames and closed shadow roots are outside the board. Choose a content root and exclusions carefully for framework-driven or frequently changing pages.
 
 MIT © 2026 Chris Cooley. Original character artwork is procedural and included under the same license.
 

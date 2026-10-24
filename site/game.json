@@ -10,9 +10,9 @@
   "icon": "runner",
   "versionNote": "Six letters change everything.",
   "controls": [
-    "Arrows / WASD \u2014 cardinal movement",
-    "Mouse \u2014 steer toward the pointer",
-    "P \u2014 pause \u00b7 G \u2014 next gate \u00b7 Esc \u2014 Recall"
+    "Arrows / WASD — cardinal movement",
+    "Mouse — steer toward the pointer",
+    "P — pause · G — next gate · Esc — Recall"
   ],
   "facts": [
     {
@@ -37,7 +37,7 @@
   "chapters": [
     {
       "title": "The text is the trail.",
-      "body": "Nearby letters become points as the runner moves through them. The movement path is sampled every seven pixels so a slow frame does not skip a whole line of edible text. At most six letters are consumed per update. Consumed glyphs disappear visually while framework-owned text stays intact in the default mode."
+      "body": "The runner turns nearby letters into points and literal 0/1 characters in the existing DOM Text nodes. Movement is sampled every seven pixels so a slow frame does not skip a line of food; at most six fresh letters are consumed per update. Spent digits remain visible but cannot be eaten twice. Recall restores still-owned text."
     },
     {
       "title": "Overclock reverses the rules.",
@@ -45,7 +45,7 @@
     },
     {
       "title": "Three approaches to pursuit.",
-      "body": "Some ghosts chase your current position. Another kind aims sixty pixels ahead in your direction of travel. Speed grows with time-based waves, capped at 205 pixels per second. Ghost silhouettes and the runner\u2019s opening jaw use small canvas paths; their animation follows the simulation clock."
+      "body": "Some ghosts chase your current position. Another kind aims sixty pixels ahead in your direction of travel. Speed grows with time-based waves, capped at 205 pixels per second. Ghost silhouettes and the runner’s opening jaw use small canvas paths; their animation follows the simulation clock."
     },
     {
       "title": "Small, finite, reusable.",

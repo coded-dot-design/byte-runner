@@ -61,10 +61,12 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
     fruitIn = 14,
     shield = 2,
     combo = 0;
+  let sealDuration = 6;
   const reset = () => {
     player = { x: api.width * 0.45, y: api.height * 0.45, angle: 0 };
     ghostPool.clear();
     pickupPool.clear();
+    api.board.resetTargets(100);
     score = 0;
     lives = 3;
     wave = 1;
@@ -125,7 +127,7 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
         7,
       )) {
         if (consumed >= 6) break;
-        if (g.rect && api.board.consume(g, "erase")) {
+        if (g.rect && api.board.consume(g, "binary")) {
           eaten++;
           score += 10;
           consumed++;
@@ -149,12 +151,19 @@ export function createGame(api: GameContext): GameSimulation<ByteRunnerStats> {
       p.life -= dt;
       if (distance(player, p) < 23) {
         power = extendPower(power);
+        sealDuration = power;
+        for (const gate of api.board.targets)
+          api.board.damage(gate, gate.health);
         score += p.kind === "fruit" ? 100 : 25;
         pickupPool.releaseAt(i);
         api.burst(p.x, p.y, "#cbff69", 12);
         api.emit("power", { seconds: power });
       } else if (p.life <= 0) pickupPool.releaseAt(i);
     }
+    // The real button fill is the gate lock timer: empty while newly sealed,
+    // refilling as overclock expires. Spawning resumes only when fully open.
+    for (const gate of api.board.targets)
+      gate.health = power > 0 ? 100 * (1 - power / sealDuration) : 100;
     if (power <= 0) {
       spawnIn -= dt;
       if (spawnIn <= 0) {

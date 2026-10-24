@@ -21,6 +21,6 @@ export function createByteRunner(
       hint: "Arrows / WASD · Eat 6 letters to spawn an orb · G: next gate",
       create: createGame,
     },
-    { ...options, controls: "keyboard" },
+    { targetEffects: "liquid", ...options, controls: "keyboard" },
   );
 }
