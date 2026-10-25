@@ -22,6 +22,8 @@ export function createByteRunner(
         { id: "jump", key: "Space", label: "Space · Jump" },
         { id: "refresh", key: "KeyM", label: "M · Refresh maze" },
       ],
+      // Maze movement: 4-way stick; Jump is the big round button.
+      touch: { stick: "4way", primary: "jump" },
       hint: "Arrows / WASD · Space / double-tap: jump · M: refresh maze · G: next area",
       create: createGame,
     },

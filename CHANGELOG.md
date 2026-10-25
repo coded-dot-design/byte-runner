@@ -1,5 +1,9 @@
 # 0.3.1
 
+## 0.10.2
+
+Mobile: the arrow D-pad becomes the shared analog thumbstick in 4-way mode (dominant axis, no corner flicker) for maze turns. Jump is the large round button and acts on press; Refresh maze is a Battlefield-style secondary button. Uses the dom-virus engine 0.21.0 snapshot; the gzip budget grows by 2 KB for the shared controls.
+
 ## 0.9.0
 
 Expand safe whitespace mazes with additional branches and loops. Add synthesized eating, power, pursuit and level cues; adopt the shared scoreboard controls.
