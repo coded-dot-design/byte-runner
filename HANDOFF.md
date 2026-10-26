@@ -116,7 +116,7 @@ Cartridge **04**, accent lime, "DOM CHASE". One action: PRESS START, then the sc
 - A deliberate second press breaks out of a pipe; key repeat or a held direction must not.
 - Project onto pipe edges, not endpoints, so catching a pipe never skips food.
 - Flies may hop between trails but must stay inside the visible playfield.
-- `CHANGELOG.md` 0.5.0 says flies are bounded to eight; `MAX_GHOSTS` is now 12.
+- `MAX_GHOSTS` (`src/rules.ts`) caps flies at 12 (it was 8 until 0.7.0).
 
 ## Keeping this file current
 

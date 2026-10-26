@@ -2,47 +2,26 @@
 
 > **Play it and read about it on DOM Virus:** https://coded-dot-design.github.io/dom-virus/games/byte-runner/ — this README holds the full technical details.
 
-## Play and develop the Astro site
-
-Product page: https://coded-dot-design.github.io/byte-runner/ (available after Pages is enabled and the deployment succeeds). Created by **Chris Cooley / coded.design**.
-
-Use Node **24** (`nvm use`), then run from this repository, where `package.json` lives:
-
-```sh
-npm ci
-npm run dev
-```
-
-Open the exact local URL Astro prints, including the `/byte-runner/` base path. `npm ci` uses the committed lockfile. `npm run dev:playground` keeps the original Vite regression playground available. The product site loads built game distributions; after editing game source, run `npm run build` and restart `npm run dev`.
-
-```sh
-npm run check
-npm run site:build
-npm run site:preview
-```
-
-`site:build` writes static output to `artifacts/site` and checks the launch script, styles and Pages asset paths. Pages builds run on every push to `main`; PR checks also build the product site. One-time setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**. No custom domain or paid hosting is required for this public repository. If the deploy job ran before enabling Pages, rerun that failed job afterward.
-
-The page defaults to your system color scheme, with persistent light/dark overrides. Game launches are explicit and lazy-loaded. Recall destroys the active controller and restores eligible game-owned edits. Menu controls, code examples and the launcher are excluded from game targets.
-
-
-
-**The page is the game board.** A small, independent MIT-licensed DOM arcade game in the DOM VIRUS collection.
+**The page is the game board.** A small, independent MIT-licensed DOM arcade game in the DOM VIRUS collection. Created by **Chris Cooley / coded.design**.
 
 Food trails follow real UI whitespace and gutters, with small pixel squares, larger glowing power squares, and fruit. The round green frog can leave the trails to eat real page letters; only explicitly marked walls and controls block it. Clear food for a 500 × level bonus. Power makes flies edible for six seconds (stacking to nine). Three lives. Up to five flies arrive immediately, building toward nine on the first level and twelve later where space permits.
 
+## Where the game lives
+
+This repository is the game package. The game page lives on the DOM Virus hub at https://coded-dot-design.github.io/dom-virus/games/byte-runner/. This repository's Pages workflow only publishes a redirect to that page; there is no per-game site to build. The hub reads `site/game.json` (page copy) and `site/art.json` (generated frog and fly art) from here and loads the tagged package.
+
 ## Run locally
 
-Node **22.12+** or Node 24, npm, and Git:
+Use Node 24 (see `.nvmrc`), npm and Git:
 
 ```sh
 git clone https://github.com/coded-dot-design/byte-runner.git
 cd byte-runner
 npm ci
-npm run dev
+npm run dev:playground
 ```
 
-Open the Vite URL, normally **http://127.0.0.1:5173**, and click **Play**. This repository includes its own fictional test page. To switch between all three games, use the separate [DOM VIRUS playground](https://github.com/coded-dot-design/dom-virus).
+Open the URL Vite prints (normally **http://127.0.0.1:5173**) and click **Play**. The playground in `playground/` is a fictional test page; it does not ship in the package. With a sibling `dom-virus` checkout, Vite uses the live engine source; otherwise it uses the `shared/` snapshot.
 
 ## Embed without a build system
 
@@ -66,7 +45,7 @@ The import is deferred until the player clicks. Keep the MIT license with redist
 ## npm-compatible install
 
 ```sh
-npm install github:coded-dot-design/byte-runner#v0.5.0
+npm install github:coded-dot-design/byte-runner#v0.10.2
 ```
 
 ```js
@@ -115,23 +94,21 @@ Set `playing` from a user action. The adapter mounts only in an effect, destroys
 
 ## Controls
 
-Arrows/WASD or the touch D-pad: choose a direction. The frog sticks to the pipe centerline, queues turns, and carries speed around bends. Space / the Jump button or a quick double-tap releases it anywhere; after a short hop, touching another trail reattaches it. M / Refresh maze rebuilds the pipes. Flies occasionally hop between trails but stay inside the viewport. Power lets the red tongue catch vulnerable flies up to 54 pixels ahead. Eat each small and glowing pellet once to clear a level. Eaten food leaves a grey trail and returns after 12 seconds (20 for power); returning food scores without resetting level progress. Real letters do not regenerate. Fruit is optional bonus food, not a power-up.
+Arrows/WASD, or the touch joystick (4-way) on phones: choose a direction. The frog sticks to the pipe centerline, queues turns, and carries speed around bends. Space / the Jump button or a quick double-tap releases it anywhere; after a short hop, touching another trail reattaches it. M / Refresh maze rebuilds the pipes. Flies occasionally hop between trails but stay inside the viewport. Power lets the red tongue catch vulnerable flies up to 54 pixels ahead. Eat each small and glowing pellet once to clear a level. Eaten food leaves a grey trail and returns after 12 seconds (20 for power); returning food scores without resetting level progress. Real letters do not regenerate. Fruit is optional bonus food, not a power-up.
 
 **P** pauses/resumes. **G** jumps to a gate. **Escape** or **Recall** exits and restores the page. The HUD can be folded. Focusing a form field pauses play; modifier shortcuts and typing are not captured. Theme follows the system unless overridden. Reduced-motion preference removes particles and decorative pulses.
 
 ## Develop and verify
 
 ```sh
-npm run typecheck
-npm test
-npm run build
-npm run size
+npm run check            # typecheck, unit tests, build, package types
+npm run size             # gzip sizes against the budget
 npm run playground:build
 ```
 
-`src/simulation.ts` owns gameplay, `src/maze.ts` owns connected corridor generation and movement, and `src/presentation.ts` owns native SVG sprites and food. `src/rules.ts` owns balance constants. `src/index.ts` exposes the factory. The engine, shared entity pools, factory selection and React lifecycle adapter are maintained once in DOM VIRUS. All engine and game implementation sources use strict TypeScript. Generated declarations preserve game-specific snapshot fields and ship with the package; the browser receives plain JavaScript. This repository includes a generated, versioned `shared/core.js` snapshot with its source fingerprint in `shared/ORIGIN.json`; do not edit that generated file. Builds use the snapshot, so this repo works independently. A sibling `dom-virus` checkout enables live source iteration in Vite. To refresh the engine snapshot, run `npm run sync:games` in that checkout, then rebuild this game. A game build never silently replaces its pinned snapshot. A runtime update never silently changes a released game.
+`src/simulation.ts` owns gameplay, `src/maze.ts` owns connected corridor generation and movement, and `src/presentation.ts` owns native SVG sprites and food. `src/rules.ts` owns balance constants. `src/index.ts` exposes the factory. The engine, shared entity pools, factory selection and React lifecycle adapter are maintained once in DOM VIRUS. All engine and game implementation sources use strict TypeScript. Generated declarations preserve game-specific snapshot fields and ship with the package; the browser receives plain JavaScript. This repository includes a generated, versioned `shared/core.js` snapshot with its source fingerprint in `shared/ORIGIN.json`; do not edit that generated file. Builds use the snapshot, so this repo works independently. A sibling `dom-virus` checkout enables live source iteration in Vite. To refresh the engine snapshot, run `npm run sync:games` in that checkout, then rebuild and test this game. A game build never silently replaces its pinned snapshot. A runtime update never silently changes a released game.
 
-The regular distribution is budgeted below **28 KB gzip including its runtime**. Runtime entities and geometry work are capped: at most 952 routing candidates during layout, 420 food nodes, twelve flies and one bonus fruit. Safe text runs, gutter connections, whitespace branches and broad loops become playable trails. The budget includes whitespace routing, native SVG presentation, synthesized sound and shared controls. Tests and Vite never ship in the package. See [shared performance notes](https://github.com/coded-dot-design/dom-virus/blob/main/PERFORMANCE.md) and [reference study](https://github.com/coded-dot-design/dom-virus/blob/main/REFERENCES.md).
+`dist/index.js` and `dist/react.js` are each budgeted at **30 KB gzip including the runtime**; `npm run size` (`scripts/size.mjs`) fails the build above that. Runtime entities and geometry work are capped: at most 952 routing candidates during layout, 420 food nodes, twelve flies and one bonus fruit. Safe text runs, gutter connections, whitespace branches and broad loops become playable trails. The budget includes whitespace routing, native SVG presentation, synthesized sound and shared controls. Tests and Vite never ship in the package. See [shared performance notes](https://github.com/coded-dot-design/dom-virus/blob/main/PERFORMANCE.md) and [reference study](https://github.com/coded-dot-design/dom-virus/blob/main/REFERENCES.md).
 
 ## First-cut support
 
@@ -141,7 +118,7 @@ MIT © 2026 Chris Cooley. Original character artwork is procedural and included 
 
 ## Version tags
 
-After checks pass on `main`, CI creates the tag matching `package.json` (for example `v0.2.0`) if it does not already exist. Existing tags never move. Bump the package version for the next release.
+After checks pass on `main`, CI creates the tag matching `package.json` (for example `v0.10.2`) if it does not already exist. Existing tags never move. Bump the package version for the next release.
 
 Target beacons now attach to their actual elements. Native layout handles their scrolling, clipping and transforms. Mobile uses stationary rings and stable fills. See the [shared DOM ownership design](https://github.com/coded-dot-design/dom-virus/blob/main/docs/dom-ownership.md).
 

@@ -45,11 +45,7 @@ state is in [HANDOFF.md](HANDOFF.md). Move items to `CHANGELOG.md` when they shi
 
 ### Docs and content cleanup
 
-- `README.md` still documents `npm run site:build` / `site:preview` and Pages hosting, mentions the
-  touch D-pad, and quotes a 28 KB budget (now 30 KB).
 - `site/game.json` controls still say "touch D-pad"; mobile uses the 4-way stick.
-- `CHANGELOG.md` 0.5.0 says flies are bounded to eight; `MAX_GHOSTS` is 12. Also reorder the file
-  (stray `# 0.3.1` at the top, `# Changelog` in the middle).
 
 ## Phase 3
 
