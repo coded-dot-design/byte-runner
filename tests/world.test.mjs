@@ -50,7 +50,8 @@ function game({ maze = track(), width = 200, height = 200, letters = [], seed = 
   // Pressed intents, latched until a step reads them (a Set would rehash: allocation).
   const pressed = { jump: 0, refresh: 0 };
   const keys = { add: (id) => (pressed[id] = 1) };
-  const input = { hit: (id) => (pressed[id] ? ((pressed[id] = 0), true) : false) };
+  const held = { right: 0, down: 0, left: 0, up: 0 };
+  const input = { hit: (id) => (pressed[id] ? ((pressed[id] = 0), true) : false), down: (id) => held[id] === 1 };
   const w = W.createWorld(e, board, new Float64Array(11), input);
   w.s[W.W] = width;
   w.s[W.H] = height;
@@ -64,7 +65,7 @@ function game({ maze = track(), width = 200, height = 200, letters = [], seed = 
       for (let i = 0; i < e.events.size; i++) seen.push(e.events.at(i).type);
     }
   };
-  return { e, w, board, seen, run, keys };
+  return { e, w, board, seen, run, keys, held };
 }
 const SPEED = 237; // px/s on the trail at level 1
 const near = (a, b) => Math.abs(a - b) < 1e-6;
@@ -119,6 +120,21 @@ test("the touch stick steers by its stronger axis", () => {
   w.step(1 / 60);
   assert.equal(w.s[W.REQUESTED], 0, "right wins");
   assert.ok(w.actors.x[0] > 20, "and the frog runs right");
+});
+
+test("keys: the newest held one wins, even with the opposite key still down", () => {
+  const { w, held } = game();
+  held.right = 1;
+  w.step(0.2);
+  const x = w.actors.x[0];
+  assert.ok(x > 40 && w.actors.dir[0] === 0);
+  held.left = 1; // Right still held: Left is newer, so the frog turns back
+  w.step(0.1);
+  assert.equal(w.actors.dir[0], 2);
+  assert.ok(w.actors.x[0] < x);
+  held.left = 0; // Left let go: Right (still held) runs again
+  w.step(0.1);
+  assert.equal(w.s[W.REQUESTED], 0);
 });
 
 test("Space jumps off the trail for 0.24 s at 280 px/s", () => {

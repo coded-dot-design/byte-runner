@@ -24,6 +24,8 @@ export interface Board {
 /** The intents a step reads (fizlet/input satisfies it). */
 export interface Intents {
   hit(intent: string): boolean;
+  /** Held right now (the arcade's up / down / left / right keys and pad). */
+  down(intent: string): boolean;
 }
 /** The visible part of the content root the maze covers, measured in the read phase: its offset in
  *  the root, size and scale (local CSS px), where the root is in the viewport, and the solid walls
@@ -54,7 +56,10 @@ export const FX = 32, FY = 33, FW = 34, FH = 35, SX = 36, SY = 37, OX = 38, OY =
 export const FRUIT = 41, FRUIT_X = 42, FRUIT_Y = 43, FRUIT_KIND = 44, FRUIT_LIFE = 45;
 /** The frog's animation (simulation time and real movement only). */
 export const MOVING = 46, RUN_T = 47, CHOMP = 48, JUMPING = 49, TONGUE_UNTIL = 50, TONGUE_X = 51, TONGUE_Y = 52, TONGUE = 53;
-const PKX = 54, PKY = 55, SLOTS = 56;
+/** FRESH: the next maze is a new level (a build for one failed; retry it as one, not as a reflow). */
+export const FRESH = 54;
+const STAMP = 55, SLOTS = 56;
+const MOVES = ["right", "down", "left", "up"] as const;
 const MAX_SOLIDS = 32, NOT = -1;
 /** Hub event payloads, by ring event `a`. */
 export const PICKUP_KINDS = ["fruit"] as const;
@@ -65,7 +70,7 @@ const dist = (x: number, y: number) => Math.sqrt(x * x + y * y);
 const opposite = (d: number) => (d + 2) % 4;
 
 /** `ctl`: the controls array to read (fizlet/arcade's, in the game); a fresh one by default (tests). */
-export function createWorld(e: Engine, board: Board, ctl: Float64Array = new Float64Array(11), input: Intents = { hit: () => false }) {
+export function createWorld(e: Engine, board: Board, ctl: Float64Array = new Float64Array(11), input: Intents = { hit: () => false, down: () => false }) {
   const s = new Float64Array(SLOTS);
   // Actors: 0 is the frog, 1 … the flies (fly k is actor k + 1). Position, edge (from → to), how far
   // along it, heading (-1 none, 0 right, 1 down, 2 left, 3 up).
@@ -75,6 +80,8 @@ export function createWorld(e: Engine, board: Board, ctl: Float64Array = new Flo
   const gid = new Int32Array(MAX_GHOSTS), gkind = new Uint8Array(MAX_GHOSTS), gphase = new Float64Array(MAX_GHOSTS), ghop = new Float64Array(MAX_GHOSTS), gland = new Int32Array(MAX_GHOSTS);
   const n = new Int32Array(2), GN = 0, SOLIDS = 1;
   const solids = new Float64Array(MAX_SOLIDS * 4), glyphs = new Int32Array(8);
+  // When each move key went down (0: up), so the newest held key wins.
+  const pressedAt = new Float64Array(4);
   // The maze and its scratch (sized on load, in the read phase).
   let g: Graph = compile({ cells: [], pellets: [], step: 64, radius: 15, clearance: 18, start: 0, path: "" }, 0, 0);
   let near = new Int16Array(0), ahead = new Int16Array(0), spawnField = new Int16Array(0), queue = new Int16Array(0);
@@ -221,7 +228,7 @@ export function createWorld(e: Engine, board: Board, ctl: Float64Array = new Flo
             for (let j = 0; j < n[GN]!; j++) reverse(j + 1);
             e.events.emit("power", s[POWER]!, 0, vx(g.px[p]!), vy(g.py[p]!));
           }
-          e.events.emit("pellet", s[REMAINING]!, g.power[p]!, vx(g.px[p]!), vy(g.py[p]!), p);
+          e.events.emit("pellet", s[REMAINING]!, g.power[p]!, vx(g.px[p]!), vy(g.py[p]!), s[SCORE]!);
         }
       }
     // Letters are optional bonus food along the corridor: at most two per bite.
@@ -232,14 +239,14 @@ export function createWorld(e: Engine, board: Board, ctl: Float64Array = new Flo
         s[EATEN]!++;
         s[SCORE]! += 5;
         eaten++;
-        e.events.emit("letter", s[EATEN]!, 0, x, y);
+        e.events.emit("letter", s[EATEN]!, 0, x, y, s[SCORE]!);
       }
     if (s[FRUIT] && dist(s[FRUIT_X]! - px, s[FRUIT_Y]! - py) < 18) {
       const bonus = (s[FRUIT_KIND] ? 300 : 100) * s[WAVE]!;
       s[SCORE]! += bonus;
       chomp();
       s[FRUIT] = 0;
-      e.events.emit("fruit", bonus, s[FRUIT_KIND]!, x, y);
+      e.events.emit("fruit", bonus, s[FRUIT_KIND]!, x, y, s[SCORE]!);
     }
   }
 
@@ -267,10 +274,14 @@ export function createWorld(e: Engine, board: Board, ctl: Float64Array = new Flo
     for (let j = 0; j < n[GN]!; j++) if (dist(g.x[k]! - ax[j + 1]!, g.y[k]! - ay[j + 1]!) <= 40) return false;
     return true;
   }
+  /** Remove fly j, keeping the others in order (the order decides who touches the frog first). */
   function removeFly(j: number) {
-    const last = --n[GN]!, a = j + 1, b = last + 1;
-    ax[a] = ax[b]!; ay[a] = ay[b]!; af[a] = af[b]!; at[a] = at[b]!; ao[a] = ao[b]!; ad[a] = ad[b]!;
-    gid[j] = gid[last]!; gkind[j] = gkind[last]!; gphase[j] = gphase[last]!; ghop[j] = ghop[last]!; gland[j] = gland[last]!;
+    const last = --n[GN]!;
+    for (let k = j; k < last; k++) {
+      const a = k + 1, b = k + 2;
+      ax[a] = ax[b]!; ay[a] = ay[b]!; af[a] = af[b]!; at[a] = at[b]!; ao[a] = ao[b]!; ad[a] = ad[b]!;
+      gid[k] = gid[k + 1]!; gkind[k] = gkind[k + 1]!; gphase[k] = gphase[k + 1]!; ghop[k] = ghop[k + 1]!; gland[k] = gland[k + 1]!;
+    }
   }
   /** A hop: a short flight to a visible cell 45–180 px away, closer to the frog on its field
    *  (farther while the frog has power), never through a wall. */
@@ -301,6 +312,7 @@ export function createWorld(e: Engine, board: Board, ctl: Float64Array = new Flo
     s[LIVES] = 3; s[WAVE] = 1; s[SHIELD] = 2.5; s[REGEN] = 1; s[FRUIT_IN] = 14;
     s[LAST_INPUT] = s[LAST_TAP] = s[TAP_AT] = s[REQUESTED] = NOT;
     n[GN] = 0;
+    pressedAt.fill(0);
     for (let i = 0; i < board.targets.length; i++) board.targets[i]!.hp = 100;
   }
   const gx = new Float64Array(MAX_GHOSTS), gy = new Float64Array(MAX_GHOSTS);
@@ -312,7 +324,8 @@ export function createWorld(e: Engine, board: Board, ctl: Float64Array = new Flo
    */
   function load(maze: Maze, frame: Frame, preserve: boolean) {
     s[REGEN] = 0;
-    if (maze.cells.length < 2 || !maze.pellets.length) return (s[READY] = 0), false;
+    if (maze.cells.length < 2 || !maze.pellets.length) return (s[READY] = 0), (s[FRESH] = preserve ? s[FRESH]! : 1), false;
+    s[FRESH] = 0;
     const had = preserve && s[PLAYER] === 1, px = vx(ax[0]!), py = vy(ay[0]!), heading = ad[0]!;
     const flies = preserve ? n[GN]! : 0;
     for (let j = 0; j < flies; j++) (gx[j] = vx(ax[j + 1]!)), (gy[j] = vy(ay[j + 1]!));
@@ -341,7 +354,6 @@ export function createWorld(e: Engine, board: Board, ctl: Float64Array = new Flo
       const w = frame.solids[i]!;
       solids[i * 4] = w.left; solids[i * 4 + 1] = w.right; solids[i * 4 + 2] = w.top; solids[i * 4 + 3] = w.bottom;
     }
-    const fruitCell = s[FRUIT] ? closest(g, s[FRUIT_X]!, s[FRUIT_Y]!) : 0;
     g = compile(maze, frame.width, frame.height);
     if (near.length < g.n) (near = new Int16Array(g.n)), (ahead = new Int16Array(g.n)), (spawnField = new Int16Array(g.n)), (queue = new Int16Array(g.n));
     s[READY] = 1;
@@ -354,7 +366,11 @@ export function createWorld(e: Engine, board: Board, ctl: Float64Array = new Flo
     if (!preserve) s[RUN_T] = s[CHOMP] = 0;
     n[GN] = 0;
     // A reflow keeps the fruit, moved onto the nearest cell of the new trails.
-    if (preserve && s[FRUIT]) (s[FRUIT_X] = g.x[Math.min(fruitCell, g.n - 1)]!), (s[FRUIT_Y] = g.y[Math.min(fruitCell, g.n - 1)]!);
+    if (preserve && s[FRUIT]) {
+      const k = closest(g, s[FRUIT_X]!, s[FRUIT_Y]!);
+      s[FRUIT_X] = g.x[k]!;
+      s[FRUIT_Y] = g.y[k]!;
+    }
     else s[FRUIT] = 0;
     s[SPAWN_IN] = 1.2;
     s[SHIELD] = Math.max(s[SHIELD]!, preserve ? 0.6 : 2);
@@ -384,16 +400,19 @@ export function createWorld(e: Engine, board: Board, ctl: Float64Array = new Flo
     s[ATTACHED] = 0;
     s[JUMP_UNTIL] = s[TIME]! + 0.24;
   }
-  /** The held direction (4-way). The touch stick: its stronger axis. Two keys: the newer one wins
-   *  (a key pressed later turns). */
+  /** The held direction (4-way). Keys: the newest held one wins (a key pressed later turns, even
+   *  while the opposite one is still down). Otherwise the move axes (the touch stick): the stronger. */
   function heading() {
-    const kx = ctl[KX]!, ky = ctl[KY]!, ax = Math.abs(kx), ay = Math.abs(ky);
-    const h = kx > 0 ? 0 : kx < 0 ? 2 : -1, v = ky > 0 ? 1 : ky < 0 ? 3 : -1;
-    let d = h < 0 ? v : v < 0 ? h : ax !== ay ? (ax > ay ? h : v) : !s[PKY] ? v : !s[PKX] ? h : s[LAST_INPUT]!;
-    if (h >= 0 && v >= 0 && d !== h && d !== v) d = v;
-    s[PKX] = kx;
-    s[PKY] = ky;
-    return d;
+    let d = -1, newest = 0;
+    for (let k = 0; k < 4; k++) {
+      if (!input.down(MOVES[k]!)) pressedAt[k] = 0;
+      else if (!pressedAt[k]) pressedAt[k] = ++s[STAMP]!;
+      if (pressedAt[k]! > newest) (newest = pressedAt[k]!), (d = k);
+    }
+    if (d >= 0) return d;
+    const kx = ctl[KX]!, ky = ctl[KY]!;
+    if (!kx && !ky) return -1;
+    return Math.abs(kx) >= Math.abs(ky) ? (kx > 0 ? 0 : 2) : ky > 0 ? 1 : 3;
   }
 
   // ---------- The step ----------
@@ -454,7 +473,7 @@ export function createWorld(e: Engine, board: Board, ctl: Float64Array = new Flo
     if (!s[REMAINING]) {
       s[TRANSITION] = 1.25;
       s[SCORE]! += 500 * s[WAVE]!;
-      e.events.emit("level-clear", s[WAVE]!, 500 * s[WAVE]!, vx(ax[0]!), vy(ay[0]!));
+      e.events.emit("level-clear", s[WAVE]!, 500 * s[WAVE]!, vx(ax[0]!), vy(ay[0]!), s[SCORE]!);
       return;
     }
     // Bonus fruit: twice a level, at 30 % and 70 % eaten (or on its timer), for 18 s.
@@ -515,7 +534,7 @@ export function createWorld(e: Engine, board: Board, ctl: Float64Array = new Flo
         s[COMBO]!++;
         const value = 100 * Math.min(s[COMBO]!, 4);
         s[SCORE]! += value;
-        e.events.emit("ghost-eaten", value, s[COMBO]!, vx(ax[i]!), vy(ay[i]!));
+        e.events.emit("ghost-eaten", value, s[COMBO]!, vx(ax[i]!), vy(ay[i]!), s[SCORE]!);
         removeFly(j);
       } else if (s[SHIELD]! <= 0) {
         s[LIVES]!--;

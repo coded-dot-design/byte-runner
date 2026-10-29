@@ -133,7 +133,7 @@ export function createByteRunner(options: ByteRunnerOptions = {}): ByteRunnerCon
             // The trails follow the page: checked every 0.35 s (sooner when a level or M asks).
             if (!s[Wd.REGEN] && e.time - checked < 0.35) return;
             checked = e.time;
-            if (s[Wd.REGEN] === 1) build(false);
+            if (s[Wd.REGEN] === 1 || s[Wd.FRESH]) build(false);
             else if (s[Wd.REGEN] || !s[Wd.READY] || view.geometryKey() !== key) build(!!s[Wd.PLAYER]);
           },
         });
@@ -147,16 +147,16 @@ export function createByteRunner(options: ByteRunnerOptions = {}): ByteRunnerCon
           over: () => s[Wd.OVER]!,
           react(ev) {
             switch (ev.type) {
-              case "pellet": ctx.emit("pellet", { remaining: ev.a, power: !!ev.b, score: s[Wd.SCORE] }); break;
+              case "pellet": ctx.emit("pellet", { remaining: ev.a, power: !!ev.b, score: ev.v }); break;
               case "power": ctx.spark(ev.x, ev.y, 10, 1); ctx.emit("power", { seconds: ev.a }); break;
               case "power-end": ctx.emit("power-end"); break;
-              case "letter": ctx.emit("letter", { eaten: ev.a, score: s[Wd.SCORE] }); break;
-              case "fruit": ctx.popup(ev.x, ev.y, ev.a, null, 0); ctx.emit("fruit", { score: s[Wd.SCORE] }); break;
+              case "letter": ctx.emit("letter", { eaten: ev.a, score: ev.v }); break;
+              case "fruit": ctx.popup(ev.x, ev.y, ev.a, null, 0); ctx.emit("fruit", { score: ev.v }); break;
               case "pickup-spawn": ctx.emit("pickup-spawn", { kind: "fruit" }); break;
               case "spawn": ctx.emit("spawn"); break;
-              case "ghost-eaten": ctx.popup(ev.x, ev.y, ev.a, null, 0); ctx.emit("ghost-eaten", { score: s[Wd.SCORE], combo: ev.b }); break;
+              case "ghost-eaten": ctx.popup(ev.x, ev.y, ev.a, null, 0); ctx.emit("ghost-eaten", { score: ev.v, combo: ev.b }); break;
               case "hurt": ctx.spark(ev.x, ev.y, 12, 2); ctx.emit("hurt", { lives: ev.a }); break;
-              case "level-clear": ctx.popup(ev.x, ev.y, 0, `LEVEL ${ev.a} CLEAR +${ev.b}`, 1); ctx.say(`LEVEL ${ev.a} CLEAR · Next trails incoming`); ctx.emit("level-clear", { wave: ev.a, score: s[Wd.SCORE] }); break;
+              case "level-clear": ctx.popup(ev.x, ev.y, 0, `LEVEL ${ev.a} CLEAR +${ev.b}`, 1); ctx.say(`LEVEL ${ev.a} CLEAR · Next trails incoming`); ctx.emit("level-clear", { wave: ev.a, score: ev.v }); break;
               case "level-start": ctx.emit("level-start", { wave: ev.a, pellets: ev.b, walls: ev.v }); break;
               case "maze-reflow": ctx.emit("maze-reflow", { wave: ev.a, pellets: ev.b, walls: ev.v }); break;
             }
