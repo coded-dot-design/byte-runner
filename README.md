@@ -21,7 +21,7 @@ npm ci
 npm run dev:playground
 ```
 
-Open the URL Vite prints (normally **http://127.0.0.1:5173**) and click **Play**. The playground in `playground/` is a fictional test page; it does not ship in the package. With a sibling `dom-virus` checkout, Vite uses the live engine source; otherwise it uses the `shared/` snapshot.
+Open the URL Vite prints (normally **http://127.0.0.1:5173**) and click **Play**. The playground in `playground/` is a fictional test page; it does not ship in the package.
 
 ## Embed without a build system
 
@@ -45,7 +45,7 @@ The import is deferred until the player clicks. Keep the MIT license with redist
 ## npm-compatible install
 
 ```sh
-npm install github:coded-dot-design/byte-runner#v0.10.2
+npm install github:coded-dot-design/byte-runner#v1.0.0
 ```
 
 ```js
@@ -57,7 +57,7 @@ game.start();
 // game.pause(); game.resume(); game.stop(); game.destroy();
 ```
 
-The npm-compatible package exports its prebuilt self-contained module. You do not need to install DOM VIRUS or any other game at runtime. The package uses this scoped name; npm registry availability is not claimed.
+The npm-compatible package exports its prebuilt self-contained module (Fizlet is bundled). You do not need to install Fizlet, DOM VIRUS or any other game at runtime. The package uses this scoped name; npm registry availability is not claimed.
 
 ## Configure the board
 
@@ -96,31 +96,32 @@ Set `playing` from a user action. The adapter mounts only in an effect, destroys
 
 Arrows/WASD, or the touch joystick (4-way) on phones: choose a direction. The frog sticks to the pipe centerline, queues turns, and carries speed around bends. Space / the Jump button or a quick double-tap releases it anywhere; after a short hop, touching another trail reattaches it. M / Refresh maze rebuilds the pipes. Flies occasionally hop between trails but stay inside the viewport. Power lets the red tongue catch vulnerable flies up to 54 pixels ahead. Eat each small and glowing pellet once to clear a level. Eaten food leaves a grey trail and returns after 12 seconds (20 for power); returning food scores without resetting level progress. Real letters do not regenerate. Fruit is optional bonus food, not a power-up.
 
-**P** pauses/resumes. **G** jumps to a gate. **Escape** or **Recall** exits and restores the page. The HUD can be folded. Focusing a form field pauses play; modifier shortcuts and typing are not captured. Theme follows the system unless overridden. Reduced-motion preference removes particles and decorative pulses.
+**P** pauses/resumes. **G** jumps to a gate. **Escape** or **Recall** exits and restores the page. The scoreboard can be folded. Typing in a form field stays the page's (keys there never steer), and modifier shortcuts are not captured. While a run is live, a click on the page doesn't follow links. Theme follows the system unless overridden. Reduced-motion preference removes particles and decorative pulses.
 
 ## Develop and verify
 
 ```sh
-npm run check            # typecheck, unit tests, build, package types
+npm run check            # typecheck, unit tests, build, package types, vendor check
 npm run size             # gzip sizes against the budget
+npm run test:browser     # the built package in Chromium (CHROMIUM_PATH picks a binary)
 npm run playground:build
 ```
 
-`src/simulation.ts` owns gameplay, `src/maze.ts` owns connected corridor generation and movement, and `src/presentation.ts` owns native SVG sprites and food. `src/rules.ts` owns balance constants. `src/index.ts` exposes the factory. The engine, shared entity pools, factory selection and React lifecycle adapter are maintained once in DOM VIRUS. All engine and game implementation sources use strict TypeScript. Generated declarations preserve game-specific snapshot fields and ship with the package; the browser receives plain JavaScript. This repository includes a generated, versioned `shared/core.js` snapshot with its source fingerprint in `shared/ORIGIN.json`; do not edit that generated file. Builds use the snapshot, so this repo works independently. A sibling `dom-virus` checkout enables live source iteration in Vite. To refresh the engine snapshot, run `npm run sync:games` in that checkout, then rebuild and test this game. A game build never silently replaces its pinned snapshot. A runtime update never silently changes a released game.
+Byte Runner runs on [Fizlet](https://github.com/coded-dot-design/fizlet), the micro animation and game engine for the DOM. `src/world.ts` owns the rules as one Fizlet system: DOM-free, on typed arrays, so a step never allocates (tested: 20,000 busy steps, no minor GC) and the same seed with the same inputs replays the same run (tested). `src/maze.ts` builds the connected trails from the page's layout in the read phase, and `src/graph.ts` compiles them into fixed arrays with a spatial index of the food for the steps. `src/presentation.ts` owns the native SVG sprites and food. `src/rules.ts` owns balance constants. `src/game.ts` is the game's definition on `fizlet/arcade`, the shell shared with Null Invaders (engine per run, page as the board, scoreboard, keys, touch pad, sound, sparks, popups and the controller). `src/index.ts` exposes the factory. `vendor/fizlet/` is a generated snapshot of Fizlet with its provenance in `vendor/fizlet/ORIGIN.json`; never edit it by hand: change Fizlet, then run `npm run sync` (from a sibling `fizlet` checkout) and rebuild.
 
-`dist/index.js` and `dist/react.js` are each budgeted at **30 KB gzip including the runtime**; `npm run size` (`scripts/size.mjs`) fails the build above that. Runtime entities and geometry work are capped: at most 952 routing candidates during layout, 420 food nodes, twelve flies and one bonus fruit. Safe text runs, gutter connections, whitespace branches and broad loops become playable trails. The budget includes whitespace routing, native SVG presentation, synthesized sound and shared controls. Tests and Vite never ship in the package. See [shared performance notes](https://github.com/coded-dot-design/dom-virus/blob/main/PERFORMANCE.md) and [reference study](https://github.com/coded-dot-design/dom-virus/blob/main/REFERENCES.md).
+`dist/index.js` is **33,670 B gzip** and budgeted at 34,000 B (`npm run size`, `scripts/size.mjs`, fails the build above that); 0.10.2 on the DOM VIRUS core was 29,160 B. The Board UI kit's CSS (keys, readouts, toast, touch pad: the family's one button language) is 2,961 B of it; the same build without that CSS is 30,709 B. Runtime entities and geometry work are capped: at most 952 routing candidates during layout, 420 food nodes, twelve flies and one bonus fruit. Safe text runs, gutter connections, whitespace branches and broad loops become playable trails. Tests and Vite never ship in the package. See the [reference study](https://github.com/coded-dot-design/dom-virus/blob/main/REFERENCES.md).
 
 ## First-cut support
 
-Modern browsers with Canvas 2D, Shadow DOM and Intl.Segmenter. CSS Highlights are optional and only fade already-mutated digits. Text replacement and Recall work without that API. Cross-origin frames and closed shadow roots are outside the board. Choose a content root and exclusions carefully for framework-driven or frequently changing pages.
+Modern browsers with Canvas 2D, Shadow DOM and Intl.Segmenter. CSS Highlights are optional and only color already-mutated digits. Text replacement and Recall work without that API. Cross-origin frames and closed shadow roots are outside the board. Choose a content root and exclusions carefully for framework-driven or frequently changing pages.
 
 MIT © 2026 Chris Cooley. Original character artwork is procedural and included under the same license.
 
 ## Version tags
 
-After checks pass on `main`, CI creates the tag matching `package.json` (for example `v0.10.2`) if it does not already exist. Existing tags never move. Bump the package version for the next release.
+After checks pass on `main`, CI creates the tag matching `package.json` (for example `v1.0.0`) if it does not already exist. Existing tags never move. Bump the package version for the next release.
 
-Target beacons now attach to their actual elements. Native layout handles their scrolling, clipping and transforms. Mobile uses stationary rings and stable fills. See the [shared DOM ownership design](https://github.com/coded-dot-design/dom-virus/blob/main/docs/dom-ownership.md).
+Gates (the page's buttons) show the power time left as a level inside the button and a beacon ring around it.
 
 Frog and fly artwork is owned by `src/art.ts`; builds generate `site/art.json` for the website. The frog combines separate body/mouth, eyes and feet. Its four-frame run advances only on actual movement, with a wider independent chomp while moving or eating. Characters have no outline or protection ring; protection uses a restrained opacity cue. Fly wings use stable individual phases. Reduced motion disables bobbing, foot loops and wing flaps.
 
@@ -132,4 +133,4 @@ Mark a composite panel with `data-byte-obstacle` to keep food, flies and guide e
 
 ### Sound and controls
 
-The scoreboard always keeps sound, pause/resume, minimize/expand and Recall in the same order. Sound uses quiet synthesized effects, starts after a real gesture and can be muted. Pause stops active voices; Recall closes audio and restores the page. Mobile movement, Jump and Refresh maze remain available while the scoreboard is minimized. While playing on mobile, page text selection and touch callouts are disabled; editable fields stay usable, and pause or Recall restores normal selection.
+The scoreboard always keeps sound, pause/resume, minimize/expand and Recall in the same order. Sound uses quiet synthesized effects, starts after a real gesture and can be muted. Pause stops active voices; Recall closes audio and restores the page. Mobile movement, Jump and Refresh maze remain available while the scoreboard is minimized. The touch pad's keys never select text or open callouts.

@@ -4,10 +4,6 @@ import {
   makeMaze,
   distances,
   blocked,
-  actorAt,
-  advance,
-  direction,
-  reverse,
   guideToTrail,
   TRAIL_CLEARANCE,
 } from "../src/maze.ts";
@@ -64,31 +60,6 @@ test("solid dividers never leave food on an unreachable island", () => {
   assert.ok(
     m.pellets.every((p) => p.x < 270) || m.pellets.every((p) => p.x > 320),
   );
-});
-test("movement stays on corridors, stops at walls, samples food, and reverses without teleporting", () => {
-  const m = makeMaze(500, 500, [], rng(5)),
-    p = actorAt(m, m.start),
-    start = m.cells[m.start],
-    next = start.exits[0];
-  const samples = [];
-  advance(
-    m,
-    p,
-    10,
-    () => next,
-    (point) => samples.push({ ...point }),
-  );
-  assert.equal(p.direction, direction(start, m.cells[next]));
-  assert.ok(samples.length >= 2);
-  const before = { x: p.x, y: p.y };
-  reverse(m, p);
-  assert.deepEqual({ x: p.x, y: p.y }, before);
-  advance(m, p, 100, () => undefined);
-  assert.equal(p.from, p.to);
-  assert.ok(Math.hypot(p.x - start.x, p.y - start.y) < 0.01);
-  const still = { ...p };
-  advance(m, p, 500, () => -1);
-  assert.deepEqual(p, still);
 });
 test("an occluded viewport has no fake corridors through page elements", () => {
   const m = makeMaze(

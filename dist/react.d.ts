@@ -1,1 +1,5 @@
-export declare const ByteRunner: (props: import("./core/react.js").GameComponentProps<import("./simulation.js").ByteRunnerStats, import("./index.js").ByteRunnerOptions>) => null;
+import type { ByteRunnerOptions } from "./game.js";
+export declare function ByteRunner({ active, options }: {
+    active?: boolean;
+    options?: ByteRunnerOptions;
+}): null;
