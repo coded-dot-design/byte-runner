@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Byte Runner test page</title>
+<style>
+  :root { color-scheme: light dark }
+  body { font: 18px/1.6 system-ui; margin: 0; background: light-dark(#f0f3e9, #101514); color: light-dark(#18271c, #e1ebdb) }
+  main { max-width: 900px; margin: auto; padding: 40px 24px 400px }
+  h1 { font-size: 64px; line-height: 1.05; margin: 0 0 24px }
+  button { font: inherit; padding: 10px 20px; border-radius: 24px; border: 1px solid #8b9e82; background: light-dark(#dfe8d6, #1d2a26); color: inherit }
+  .bar { position: sticky; top: 0; z-index: 1; padding: 12px 24px; background: light-dark(#f0f3e9, #101514) }
+</style>
+<div class="bar" data-virus-ignore><button id="start">Play</button><button id="stop">Recall</button></div>
+<main id="board">
+  <h1>The page is your playground.</h1>
+  <p>Real words. Real buttons. A tiny arcade world hiding in the document, with <a href="#away" id="link">a link</a> inside.</p>
+  <button id="gate" style="color: rgb(1, 2, 3)">First gate</button>
+  <h2>Make something unexpected.</h2>
+  <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. A hundred small observations turn into something new.</p>
+  <button>Second gate</button>
+  <form><p>Protected text in a form.</p><input id="field" placeholder="Typing stays yours" /></form>
+  <h2>More to read below.</h2>
+  <p>Scroll on: the trails follow the page, and the run carries over.</p>
+</main>
+<script type="module">
+  import { createByteRunner } from "/dist/index.js";
+  window.events = [];
+  window.launch = (extra = {}) => {
+    window.game?.destroy();
+    window.game = createByteRunner({ root: "#board", seed: 11, sound: false, onEvent: (e) => window.events.push(e.type), ...extra });
+    return window.game.start();
+  };
+  document.querySelector("#start").onclick = () => window.launch();
+  document.querySelector("#stop").onclick = () => window.game?.destroy();
+</script>
+</html>

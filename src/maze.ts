@@ -1,4 +1,5 @@
-/** Whitespace routes guide food and flies; their soft edges never fence in the frog. */
+/** Whitespace routes guide food and flies; their soft edges never fence in the frog. The maze is
+ * built from the page's layout in the read phase (it allocates); ./graph compiles it for the steps. */
 export interface Point {
   x: number;
   y: number;
@@ -34,22 +35,6 @@ export interface Maze {
 }
 export const TRAIL_RADIUS = 15;
 export const TRAIL_CLEARANCE = TRAIL_RADIUS + 3;
-export const DIRECTIONS = [
-  [1, 0],
-  [0, 1],
-  [-1, 0],
-  [0, -1],
-] as const;
-export const opposite = (direction: number) => (direction + 2) % 4;
-export function direction(a: Point, b: Point) {
-  return Math.abs(b.x - a.x) > Math.abs(b.y - a.y)
-    ? b.x > a.x
-      ? 0
-      : 2
-    : b.y > a.y
-      ? 1
-      : 3;
-}
 export function blocked(
   a: Point,
   b: Point,
@@ -523,67 +508,6 @@ export function makeMaze(
   if (exits.length > 1 && random() > 0.5) exits.reverse();
   maze.path = paths.join("");
   return maze;
-}
-
-export interface Actor extends Point {
-  from: number;
-  to: number;
-  offset: number;
-  direction: number;
-}
-export function actorAt(maze: Maze, id: number): Actor {
-  return {
-    x: maze.cells[id]!.x,
-    y: maze.cells[id]!.y,
-    from: id,
-    to: id,
-    offset: 0,
-    direction: -1,
-  };
-}
-/** Select at junctions, then spend the whole frame's distance along valid edges. */
-export function advance(
-  maze: Maze,
-  actor: Actor,
-  distance: number,
-  choose: (cell: Cell) => number | undefined,
-  visit: (point: Point) => void = () => {},
-) {
-  while (distance > 0.001) {
-    if (actor.from === actor.to) {
-      const next = choose(maze.cells[actor.from]!);
-      if (next === undefined || !maze.cells[actor.from]!.exits.includes(next))
-        break;
-      actor.to = next;
-      actor.offset = 0;
-      actor.direction = direction(maze.cells[actor.from]!, maze.cells[next]!);
-    }
-    const a = maze.cells[actor.from]!,
-      b = maze.cells[actor.to]!;
-    const length = Math.hypot(b.x - a.x, b.y - a.y),
-      step = Math.min(distance, length - actor.offset, 6);
-    actor.offset += step;
-    distance -= step;
-    actor.x = a.x + ((b.x - a.x) * actor.offset) / length;
-    actor.y = a.y + ((b.y - a.y) * actor.offset) / length;
-    visit(actor);
-    if (actor.offset >= length - 0.001) {
-      actor.from = actor.to;
-      actor.offset = 0;
-    }
-  }
-}
-export function reverse(maze: Maze, actor: Actor) {
-  if (actor.from === actor.to) return;
-  const a = actor.from;
-  actor.from = actor.to;
-  actor.to = a;
-  actor.offset =
-    Math.hypot(
-      maze.cells[a]!.x - maze.cells[actor.from]!.x,
-      maze.cells[a]!.y - maze.cells[actor.from]!.y,
-    ) - actor.offset;
-  actor.direction = opposite(actor.direction);
 }
 
 /** Correct only sideways drift onto a nearby parallel trail. A perpendicular
