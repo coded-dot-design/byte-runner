@@ -17,8 +17,9 @@ export interface Target {
 /** The page as the board (fizlet/board-page satisfies it). */
 export interface Board {
   readonly targets: readonly Target[];
-  /** Unspent on-screen glyphs touching the circle, into `out`; how many. */
-  near(x: number, y: number, r: number, out: Int32Array): number;
+  /** Unspent on-screen glyphs touching the circle p[i], p[i + 1], radius p[i + 2], into `out`; how
+   *  many. (A typed form: a number passed to a call V8 doesn't inline boxes.) */
+  nearAt(p: Float64Array, i: number, out: Int32Array): number;
   consume(i: number, as?: "binary" | "erase"): boolean;
 }
 /** The intents a step reads (fizlet/input satisfies it). */
@@ -79,7 +80,7 @@ export function createWorld(e: Engine, board: Board, ctl: Float64Array = new Flo
   // Flies: id (art identity), kind (0..2), wing phase, time to the next hop, landing cell (-1: none).
   const gid = new Int32Array(MAX_GHOSTS), gkind = new Uint8Array(MAX_GHOSTS), gphase = new Float64Array(MAX_GHOSTS), ghop = new Float64Array(MAX_GHOSTS), gland = new Int32Array(MAX_GHOSTS);
   const n = new Int32Array(2), GN = 0, SOLIDS = 1;
-  const solids = new Float64Array(MAX_SOLIDS * 4), glyphs = new Int32Array(8);
+  const solids = new Float64Array(MAX_SOLIDS * 4), glyphs = new Int32Array(8), bite = new Float64Array(3);
   // When each move key went down (0: up), so the newest held key wins.
   const pressedAt = new Float64Array(4);
   // The maze and its scratch (sized on load, in the read phase).
@@ -233,7 +234,10 @@ export function createWorld(e: Engine, board: Board, ctl: Float64Array = new Flo
       }
     // Letters are optional bonus food along the corridor: at most two per bite.
     const x = vx(px), y = vy(py);
-    for (let k = 0, m = board.near(x, y, 13, glyphs), eaten = 0; k < m && eaten < 2; k++)
+    bite[0] = x;
+    bite[1] = y;
+    bite[2] = 13;
+    for (let k = 0, m = board.nearAt(bite, 0, glyphs), eaten = 0; k < m && eaten < 2; k++)
       if (board.consume(glyphs[k]!, "binary")) {
         chomp();
         s[EATEN]!++;

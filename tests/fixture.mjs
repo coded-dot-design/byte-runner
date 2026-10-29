@@ -17,7 +17,8 @@ export function page(points = []) {
   return {
     targets: [{ hp: 100 }],
     spent,
-    near(x, y, r, out) {
+    nearAt(q, at, out) {
+      const x = q[at], y = q[at + 1], r = q[at + 2];
       let m = 0;
       for (let i = 0; i < points.length && m < out.length; i++) {
         const p = points[i];
