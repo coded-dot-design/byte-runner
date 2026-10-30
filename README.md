@@ -96,6 +96,23 @@ Set `playing` from a user action. The adapter mounts only in an effect, destroys
 
 Arrows/WASD, or the touch joystick (4-way) on phones: choose a direction. The frog sticks to the pipe centerline, queues turns, and carries speed around bends. Space / the Jump button or a quick double-tap releases it anywhere; after a short hop, touching another trail reattaches it. M / Refresh maze rebuilds the pipes. Flies occasionally hop between trails but stay inside the viewport. Power lets the red tongue catch vulnerable flies up to 54 pixels ahead. Eat each small and glowing pellet once to clear a level. Eaten food leaves a grey trail and returns after 12 seconds (20 for power); returning food scores without resetting level progress. Real letters do not regenerate. Fruit is optional bonus food, not a power-up.
 
+### Keys
+
+The whole game plays from the keyboard; the mouse never steers.
+
+| Key | Does |
+| --- | --- |
+| **Tab**, then **Enter** on Play | Start (focus moves to the scoreboard) |
+| **Arrows** / **W A S D** | Run along the trails; turns queue at junctions |
+| **Space** | Jump off the trail (touch another trail to reattach) |
+| **M** | Refresh maze (new trails, same run) |
+| **G** | Next gate: scroll to another section |
+| **P** | Pause / resume |
+| **Escape** | Recall: close the game, restore the page, focus returns to what started it |
+| **Tab** / **Shift+Tab**, **Enter** | Scoreboard keys: sound, pause / resume, minimize / expand, Recall, Jump, Refresh maze, Next gate, Restart |
+
+When a run ends, focus moves to **Restart** (Enter plays again, Escape closes). Screen readers hear the start, score (at most once a second, the latest), lives, pause / resume, level clear and game over through one polite live region.
+
 **P** pauses/resumes. **G** jumps to a gate. **Escape** or **Recall** exits and restores the page. The scoreboard can be folded. Typing in a form field stays the page's (keys there never steer), and modifier shortcuts are not captured. While a run is live, a click on the page doesn't follow links. Theme follows the system unless overridden. Reduced-motion preference removes particles and decorative pulses.
 
 ## Develop and verify
@@ -109,7 +126,7 @@ npm run playground:build
 
 Byte Runner runs on [Fizlet](https://github.com/coded-dot-design/fizlet), the micro animation and game engine for the DOM. `src/world.ts` owns the rules as one Fizlet system: DOM-free, on typed arrays, so a step never allocates (tested: 20,000 busy steps, no minor GC) and the same seed with the same inputs replays the same run (tested). `src/maze.ts` builds the connected trails from the page's layout in the read phase, and `src/graph.ts` compiles them into fixed arrays with a spatial index of the food for the steps. `src/presentation.ts` owns the native SVG sprites and food. `src/rules.ts` owns balance constants. `src/game.ts` is the game's definition on `fizlet/arcade`, the shell shared with Null Invaders (engine per run, page as the board, scoreboard, keys, touch pad, sound, sparks, popups and the controller). `src/index.ts` exposes the factory. `vendor/fizlet/` is a generated snapshot of Fizlet with its provenance in `vendor/fizlet/ORIGIN.json`; never edit it by hand: change Fizlet, then run `npm run sync` (from a sibling `fizlet` checkout) and rebuild.
 
-`dist/index.js` is **35,363 B gzip** (1.0.2, Fizlet 0.20.0; 1.0.1 was 34,859 B; 1.0.0 was 33,868 B) and budgeted at 35,500 B (`npm run size`, `scripts/size.mjs`, fails the build above that); 0.10.2 on the DOM VIRUS core was 29,160 B. The Board UI kit's CSS (keys, readouts, toast, touch pad: the family's one button language) is 3,105 B of 1.0.1's build; that build without the CSS is 31,697 B. Runtime entities and geometry work are capped: at most 952 routing candidates during layout, 420 food nodes, twelve flies and one bonus fruit. Safe text runs, gutter connections, whitespace branches and broad loops become playable trails. Tests and Vite never ship in the package. See the [reference study](https://github.com/coded-dot-design/dom-virus/blob/main/REFERENCES.md).
+`dist/index.js` is **36,211 B gzip** with accessible play (unreleased; 1.0.2 on Fizlet 0.20.0 was 35,363 B; 1.0.1 was 34,859 B; 1.0.0 was 33,868 B) and budgeted at 36,348 B (`npm run size`, `scripts/size.mjs`, fails the build above that); 0.10.2 on the DOM VIRUS core was 29,160 B. The Board UI kit's CSS (keys, readouts, toast, touch pad: the family's one button language) is 3,105 B of 1.0.1's build; that build without the CSS is 31,697 B. Runtime entities and geometry work are capped: at most 952 routing candidates during layout, 420 food nodes, twelve flies and one bonus fruit. Safe text runs, gutter connections, whitespace branches and broad loops become playable trails. Tests and Vite never ship in the package. See the [reference study](https://github.com/coded-dot-design/dom-virus/blob/main/REFERENCES.md).
 
 ## First-cut support
 

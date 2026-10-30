@@ -1,6 +1,6 @@
 // The built package in a real browser: trails in the page, eating, the page's own clicks and
 // fields, M (a new maze, same run), scrolling, pause, game over, the phone joystick, and Recall giving
-// the page back byte for byte.
+// the page back byte for byte; keyboard focus and the screen reader announcements.
 // Run after `npm run build`: node tests/browser.mjs (CHROMIUM_PATH picks a browser binary).
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
@@ -24,6 +24,20 @@ const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePa
 const snapshot = (page) => page.evaluate(() => document.documentElement.outerHTML);
 const state = (page) => page.evaluate(() => window.game.getSnapshot());
 const art = (page, sel) => page.evaluate((s) => document.querySelector("[data-fizlet-host=byte-runner-art]")?.shadowRoot?.querySelectorAll(s).length ?? -1, sel);
+/** Every text the announcer's live region takes, kept in window.spoken. */
+const listen = (page) => page.evaluate(() => {
+  window.spoken = [];
+  new MutationObserver(() => {
+    const r = document.querySelector("[data-fz-announce]");
+    if (r && r.textContent !== window.spoken.at(-1)) window.spoken.push(r.textContent);
+  }).observe(document.body, { subtree: true, childList: true, characterData: true });
+});
+/** The focused element through shadow roots: "#id" or "[data-a=…]" or the tag. */
+const focused = (page) => page.evaluate(() => {
+  let a = document.activeElement;
+  while (a?.shadowRoot?.activeElement) a = a.shadowRoot.activeElement;
+  return a.id ? `#${a.id}` : a.dataset.a ? `[data-a=${a.dataset.a}]` : a.tagName.toLowerCase();
+});
 /** Hold keys in turn (a little square), `ms` each. */
 async function run(page, keys, ms) {
   for (const k of keys) {
@@ -40,7 +54,16 @@ try {
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(url);
   const before = await snapshot(page);
-  await page.evaluate(() => window.launch());
+  await listen(page);
+  // Keyboard only: Play by Tab + Enter, focus moves to the scoreboard.
+  await page.keyboard.press("Tab");
+  assert.equal(await focused(page), "#start");
+  await page.keyboard.press("Enter");
+  assert.equal(await focused(page), "section", "a run starts with focus on the scoreboard");
+  const region = page.locator("[data-fz-announce]");
+  await region.waitFor({ state: "attached" });
+  assert.deepEqual(await region.evaluate((r) => [r.getAttribute("role"), r.getAttribute("aria-live"), r.getAttribute("aria-atomic"), r.parentElement === document.body]), ["status", "polite", "true", true]);
+  assert.equal(await page.locator("[data-fizlet-host=byte-runner]").evaluate((h) => h.shadowRoot.querySelector(".msg").getAttribute("role")), null, "the toast is not a second live region");
   assert.equal((await state(page)).status, "running");
   assert.equal(await page.locator("[data-fizlet-host=byte-runner]").count(), 1, "the scoreboard is on the page");
   // The trails and food are drawn inside the page's own root (they scroll with it).
@@ -52,6 +75,11 @@ try {
   let s = await state(page);
   assert.ok(s.score > 0 && s.pellets > 0, `ate (${s.score}, ${s.pellets} pellets)`);
   assert.equal(s.pelletsRemaining + s.pellets, s.pelletsTotal);
+  await page.waitForTimeout(1100);
+  const spoken = await page.evaluate(() => window.spoken);
+  assert.match(spoken[0], /^Byte Runner started/);
+  assert.ok(spoken.some((t) => /^Score \d+/.test(t)), `score spoken: ${JSON.stringify(spoken)}`);
+  assert.ok(spoken.filter((t) => /Score/.test(t)).length <= 5, "score coalesced, at most once a second");
   assert.notEqual(await snapshot(page), before, "the page is in play");
   // A click on a link does not follow it while playing.
   await page.click("#link");
@@ -81,8 +109,12 @@ try {
   assert.equal((await state(page)).elapsed, t, "paused time stands still");
   await page.keyboard.press("KeyP");
   assert.equal((await state(page)).status, "running");
+  // Rate-limited: "Resumed" waits out the second after "Paused".
+  await page.waitForFunction(() => window.spoken.includes("Paused") && window.spoken.some((t) => /Resumed/.test(t)), null, { timeout: 3000 });
   await page.keyboard.press("Escape");
   assert.equal((await state(page)).status, "idle");
+  assert.equal(await region.count(), 0, "the live region goes with the run");
+  assert.equal(await focused(page), "#start", "Recall gives focus back to what started the run");
   await page.fill("#field", "");
   await page.mouse.wheel(0, -300);
   await page.waitForTimeout(100);
@@ -104,12 +136,17 @@ try {
   const over = await browser.newPage({ viewport: { width: 900, height: 700 } });
   await over.goto(url);
   const bare = await snapshot(over);
+  await listen(over);
   await over.evaluate(() => window.launch());
   await over.waitForFunction(() => window.game.getSnapshot().status === "gameover", null, { timeout: 120000 });
   s = await state(over);
   assert.equal(s.lives, 0);
   assert.match(await over.locator("[data-fizlet-host=byte-runner]").evaluate((h) => h.shadowRoot.textContent), /GAME OVER/);
   assert.equal(await over.locator("[data-fizlet-host=byte-runner-art]").count(), 0, "the art is gone with the run");
+  const said = await over.evaluate(() => window.spoken);
+  assert.ok(said.some((t) => /Lives 2/.test(t)), `lives spoken: ${JSON.stringify(said)}`);
+  assert.match(said.at(-1), /Game over\. Score 0\. Run ended/);
+  assert.equal(await focused(over), "[data-a=restart]", "a finished run puts focus on Restart");
   await over.keyboard.press("Escape");
   assert.equal((await state(over)).status, "idle");
   assert.equal(await snapshot(over), bare, "the page is back after the run ends");
@@ -140,7 +177,7 @@ try {
   }
   assert.ok(moved > 30, `the joystick runs the frog (${moved.toFixed(0)} px)`);
   await phone.close();
-  console.log("Byte Runner browser: trails in the page, eating, links and fields, M, scroll, pause, Recall restores exactly, frame time, game over, phone joystick passed.");
+  console.log("Byte Runner browser: keyboard start and focus, announcements, trails in the page, eating, links and fields, M, scroll, pause, Recall restores exactly, frame time, game over, phone joystick passed.");
 } catch (err) {
   console.error(`browser test failed at: ${where}`);
   throw err;

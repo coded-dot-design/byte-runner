@@ -19,7 +19,7 @@ const VECTORS = [[1, 0], [0, 1], [-1, 0], [0, -1]] as const;
 /** Native parts of the page the trails route around (and the frog never lands on). */
 const OBSTACLES = 'button,a[href],input,select,textarea,summary,[role="button"],[contenteditable="true"],img,svg,canvas,video,iframe,object,embed,pre,table,hr,figure,fieldset,details,[role="img"]';
 /** Text that is never terrain: code, controls, and any Fizlet host (our own art and scoreboard). */
-const NOT_TEXT = "script,style,noscript,svg,canvas,button,a[href],input,select,textarea,pre,table,[data-fizlet-host],[data-dom-virus-root],[data-virus-ui]";
+const NOT_TEXT = "script,style,noscript,svg,canvas,button,a[href],input,select,textarea,pre,table,[data-fizlet-host],[data-dom-virus-root],[data-virus-ui],[data-fz-announce]";
 
 const set = (node: Element, key: string, value: string) => {
   if (node.getAttribute(key) !== value) node.setAttribute(key, value);

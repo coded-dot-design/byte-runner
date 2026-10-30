@@ -5,7 +5,9 @@ import { readFileSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 // 1.0.2, Fizlet 0.20.0: 35,363 B (+504 B over 1.0.1's 34,859 B: the arcade touch lock +178 B, the
 // kit's touch CSS +78 B, the rest of 0.20.0 +248 B). Inside the budget.
-const BUDGET = 35500;
+// Accessible play (E14): 36,211 B (+848 B: the announcer, one polite live region, and the focus
+// handling around the scoreboard card). The budget moves up by that: 35,500 → 36,348 B.
+const BUDGET = 36348;
 for (const file of ["dist/index.js", "dist/react.js"]) {
   const bytes = readFileSync(file), gzip = gzipSync(bytes).length;
   console.log(`${file}: ${bytes.length} bytes / ${gzip} gzip (budget ${BUDGET})`);

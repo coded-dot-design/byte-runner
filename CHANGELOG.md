@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+Accessible play (roadmap E14). Same game and rules: no step, rule or balance change.
+
+- **Keyboard only, start to finish:** Tab + Enter on the page's Play key starts a run and moves focus to the scoreboard; every scoreboard key (sound, pause / resume, minimize, Recall, Jump, Refresh maze, Next gate, Restart) is reachable with Tab / Shift+Tab and shows the kit's focus ring; Tab leaves the scoreboard again (no trap). When a run ends, focus moves to Restart; Escape (Recall) gives focus back to what started the run. Keys are listed in the README ("Keys"), `site/game.json` controls and the playground. Checked in Chromium with Playwright on the test page and the playground.
+- **Screen reader announcements** through one polite live region (`src/announce.ts`, the same contract as Fizlet's proposed `fizlet/announce` brick, so a later sync swaps the import): run started (with the keys), score (coalesced to the latest, at most once a second), lives, paused / resumed, level clear, and game over / stage clear with the score (flushed at once). Spoken change-only from the HUD write and the run's end, never from a step; nothing is allocated when nothing changed (zero-GC test green). The scoreboard's toast is no longer a second live region (it stays visual). The region is created on the first announcement and removed at Recall, so Recall still restores the page byte for byte; the trails ignore it (`[data-fz-announce]` is not terrain).
+- **axe-core:** zero serious or critical violations on the test page and the playground, idle, running, paused, at game over and after Recall, light and dark. The only one before was the test page's own `#gate` (serious colour contrast in dark mode: an inline `color: rgb(1, 2, 3)` kept to test Recall; it now also has an inline light background). The playground's bar is a `<header>` (axe "region").
+- **Size:** `dist/index.js` is 36,211 B gzip (1.0.2 was 35,363 B, +848 B; `dist/react.js` 35,453 → 36,293 B, +840 B): the announcer (`src/announce.ts`, the region and its rate limit), the spoken texts, and the focus handling around the scoreboard card. The budget moves from 35,500 to 36,348 B (+848 B, the measured delta).
+- **Tests:** `tests/announce.test.mjs` (one shared region and its attributes, coalescing, the rate limit, flush, identical text spoken again, destroy); the browser test also checks keyboard start and focus, the region, score, pause, lives and game over being announced, focus on Restart and back after Recall.
+
 ## 1.0.2
 
 On Fizlet 0.20.0 (was 0.19.0; `vendor/fizlet` from the v0.20.0 release, `bf42a8c`). Same game and rules: the vendored engine is the only code change.

@@ -5,7 +5,9 @@
 // sound, sparks, popups, the controller the DOM VIRUS hub drives) is fizlet/arcade; the rules are
 // ./world; the trails are built from the page's layout by ./maze in the read phase; the art is an
 // SVG inside the page (./presentation). This file is the game's definition.
-import { arcade, CALM, TARGET_HP, VH, VW } from "../vendor/fizlet/arcade";
+import { arcade, arcadeHud, CALM, TARGET_HP, VH, VW } from "../vendor/fizlet/arcade";
+import { announcer } from "./announce.js";
+import type { Announcer } from "./announce.js";
 import { seeded } from "../vendor/fizlet/kernel/random";
 import { makeMaze } from "./maze.js";
 import { createPresentation } from "./presentation.js";
@@ -84,6 +86,11 @@ const COLOR = "#3ecb74";
 const pad = (n: number, k: number) => String(n).padStart(k, "0");
 
 export function createByteRunner(options: ByteRunnerOptions = {}): ByteRunnerController {
+  // Accessible play: the scoreboard card (arcadeHud, the default) with a screen reader voice (one
+  // polite live region, rate-limited; the toast stays visual) and focus that goes somewhere: the
+  // card when a run starts, Restart when it ends, back to what started it after Recall.
+  const card = arcadeHud();
+  let ann: Announcer | null = null, opener: HTMLElement | null = null;
   return arcade<ByteRunnerStats>(
     {
       id: "byte-runner",
@@ -93,6 +100,39 @@ export function createByteRunner(options: ByteRunnerOptions = {}): ByteRunnerCon
       touchHint: "Joystick to run · Jump to leap a gap",
       css: __KIT_CSS__,
       keyboard: true,
+      hud: {
+        css: card.css,
+        mount(r) {
+          const view = card.mount(r), a = (ann = announcer()), doc = document, ui = r.ui;
+          const panel = ui.querySelector<HTMLElement>(".ar")!, focused = doc.activeElement;
+          if (focused instanceof HTMLElement && focused !== doc.body && !focused.closest("[data-fizlet-host]")) opener = focused;
+          view.msg.removeAttribute("role");
+          panel.tabIndex = -1;
+          panel.focus({ preventScroll: true });
+          a.say("status", "Byte Runner started. Arrows or WASD move, Space jumps, M refreshes the maze, G goes to the next gate, P pauses, Escape exits");
+          r.signal.addEventListener("abort", () => {
+            a.destroy();
+            queueMicrotask(() => doc.activeElement === doc.body && opener?.isConnected && opener.focus());
+          });
+          let was = "";
+          return {
+            ...view,
+            sync() {
+              view.sync();
+              const st = r.status();
+              if (st === "paused" || was === "paused") a.say("status", st === "paused" ? "Paused" : "Resumed");
+              was = st;
+            },
+            end(won, notice, stats) {
+              view.end(won, notice, stats);
+              a.say("status", `${won ? "Stage clear" : "Game over"}. Score ${stats.score}. ${notice}`);
+              a.flush();
+              const at = doc.activeElement;
+              if (!at || at === doc.body || at.closest("[data-fizlet-host]")) ui.querySelector<HTMLElement>("[data-a=restart]")?.focus();
+            },
+          };
+        },
+      },
       actions: [
         { id: "jump", key: "Space", label: "Space · Jump" },
         { id: "refresh", key: "KeyM", label: "M · Refresh maze" },
@@ -114,6 +154,7 @@ export function createByteRunner(options: ByteRunnerOptions = {}): ByteRunnerCon
         const { s, ctl } = world;
         const seed = Math.floor(ctx.engine.random() * 0x7fffffff);
         let key = "", checked = -1;
+        const said = new Float64Array(2).fill(NaN); // score and lives last spoken (change-only)
         // A maze from the page's layout (read phase): a new level, or the same run reflowed.
         function build(preserve: boolean) {
           const frame = view.measure();
@@ -156,7 +197,7 @@ export function createByteRunner(options: ByteRunnerOptions = {}): ByteRunnerCon
               case "spawn": ctx.emit("spawn"); break;
               case "ghost-eaten": ctx.popup(ev.x, ev.y, ev.a, null, 0); ctx.emit("ghost-eaten", { score: ev.v, combo: ev.b }); break;
               case "hurt": ctx.spark(ev.x, ev.y, 12, 2); ctx.emit("hurt", { lives: ev.a }); break;
-              case "level-clear": ctx.popup(ev.x, ev.y, 0, `LEVEL ${ev.a} CLEAR +${ev.b}`, 1); ctx.say(`LEVEL ${ev.a} CLEAR · Next trails incoming`); ctx.emit("level-clear", { wave: ev.a, score: ev.v }); break;
+              case "level-clear": ctx.popup(ev.x, ev.y, 0, `LEVEL ${ev.a} CLEAR +${ev.b}`, 1); ctx.say(`LEVEL ${ev.a} CLEAR · Next trails incoming`); ann?.say("status", `Level ${ev.a} clear`); ctx.emit("level-clear", { wave: ev.a, score: ev.v }); break;
               case "level-start": ctx.emit("level-start", { wave: ev.a, pellets: ev.b, walls: ev.v }); break;
               case "maze-reflow": ctx.emit("maze-reflow", { wave: ev.a, pellets: ev.b, walls: ev.v }); break;
             }
@@ -170,6 +211,9 @@ export function createByteRunner(options: ByteRunnerOptions = {}): ByteRunnerCon
             out[2] = s[Wd.LIVES]!;
             out[3] = Math.ceil(s[Wd.POWER]! * 10);
             out[4] = s[Wd.REMAINING]! * 1024 + s[Wd.WAVE]! + (s[Wd.READY] ? 0 : 0.5); // the meter's change key
+            // Spoken on change only (the announcer coalesces a burst of points to the latest score).
+            if (out[0] !== said[0]) said[0] === said[0] && ann?.say("score", `Score ${out[0]}`), (said[0] = out[0]!);
+            if (out[2] !== said[1]) said[1] === said[1] && ann?.say("lives", `Lives ${out[2]}`), (said[1] = out[2]!);
           },
           meter() {
             const left = s[Wd.REMAINING]!, total = s[Wd.TOTAL]!;

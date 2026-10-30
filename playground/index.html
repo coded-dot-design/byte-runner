@@ -75,14 +75,30 @@
       color: inherit;
       border: 1px solid #60705c;
     }
+    .keys {
+      max-width: 1000px;
+      margin: auto;
+      padding: 0 36px 70px;
+    }
+    .keys dl {
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      gap: 6px 18px;
+    }
+    .keys dt {
+      font-weight: 700;
+    }
+    .keys dd {
+      margin: 0;
+    }
     small {
       font: 12px monospace;
     }
   </style>
-  <div class="bar" data-virus-ignore>
+  <header class="bar" data-virus-ignore>
     <strong>Byte Runner</strong><button id="start">Play ↗</button
     ><button id="stop">Recall</button>
-  </div>
+  </header>
   <main id="board">
     <small>CODED.DESIGN / DOM VIRUS / INDEPENDENT GAME</small>
     <h1>The page is<br />your playground.</h1>
@@ -136,6 +152,19 @@
       </form>
     </section>
   </main>
+  <aside class="keys" aria-labelledby="keys-title" data-virus-ignore>
+    <h2 id="keys-title">Keys</h2>
+    <dl>
+      <dt>Tab, Enter on Play</dt><dd>Start (focus moves to the scoreboard)</dd>
+      <dt>Arrows / W A S D</dt><dd>Run; turns queue at junctions</dd>
+      <dt>Space</dt><dd>Jump off the trail</dd>
+      <dt>M</dt><dd>Refresh maze</dd>
+      <dt>G</dt><dd>Next gate</dd>
+      <dt>P</dt><dd>Pause / resume</dd>
+      <dt>Escape</dt><dd>Recall: close the game and restore the page</dd>
+      <dt>Tab / Shift+Tab, Enter</dt><dd>Scoreboard keys: sound, pause, minimize, Recall, Jump, Refresh maze, Next gate, Restart</dd>
+    </dl>
+  </aside>
   <script type="module">
     import { createByteRunner } from "../src/index.ts";
     let game;
