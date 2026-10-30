@@ -13,7 +13,9 @@
     "Arrows / WASD / touch joystick — race through pipes and queue turns",
     "Space / Jump button or double-tap a direction — jump out; touch a trail to reattach",
     "M / Refresh maze — redraw trails · P — pause · G — next area · Esc — Recall",
-    "Scoreboard: sound · pause / resume · minimize · Recall"
+    "Scoreboard: sound · pause / resume · minimize · Recall",
+    "Keyboard only: Tab / Shift+Tab reach every scoreboard key, Enter presses · Space jumps · P pauses · Esc closes and returns focus",
+    "Screen readers hear score, lives, level clear and game over (one polite, rate-limited live region)"
   ],
   "facts": [
     {
