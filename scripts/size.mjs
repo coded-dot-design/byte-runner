@@ -3,6 +3,8 @@
 // the family's one button language) is 2,962 B of it; the same build without that CSS is 30,906 B.
 import { readFileSync } from "node:fs";
 import { gzipSync } from "node:zlib";
+// 1.0.2, Fizlet 0.20.0: 35,363 B (+504 B over 1.0.1's 34,859 B: the arcade touch lock +178 B, the
+// kit's touch CSS +78 B, the rest of 0.20.0 +248 B). Inside the budget.
 const BUDGET = 35500;
 for (const file of ["dist/index.js", "dist/react.js"]) {
   const bytes = readFileSync(file), gzip = gzipSync(bytes).length;
