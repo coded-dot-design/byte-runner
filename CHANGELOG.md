@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.1
+
+On Fizlet 0.19.0 (was 0.13.0). Same game and rules: the vendored engine is the only code change.
+
+- **Fixed: the game draws in the right place on 2× and zoomed screens** (Fizlet 0.18.0). The arcade canvas now fills the overlay with CSS (`width:100%;height:100%`); before, it had no CSS size, so on a 1.5× or 2× screen the gates' beacon rings, sparks and popups (the trails, food and sprites are in the page and were never off) drew 1.5–2× too big and away from the page targets. Checked in Chromium at deviceScaleFactor 2 (1280 × 800): the canvas is 1280 × 800 CSS px over its 1920 × 1200 backing store (was 1920 × 1200 CSS px), and the beacon ring sits around the first gate button (was 1.5× away from it, across the text).
+- **The scoreboard drags** (Fizlet 0.19.0, fizlet#70): grab the card anywhere that isn't a key, with mouse or touch; it stays inside the window, also when the window shrinks. Checked in Chromium: dragged 400 px left and 300 px up, flung past the edges and resized to 700 × 500, it stayed fully on screen.
+- **Also from Fizlet 0.14–0.19:** the kit's key labels pass WCAG AA in both themes (token contrast), and a capped engine caps its animation frames, not just its work. Strict `exactOptionalPropertyTypes` typecheck passes.
+- **Size:** `dist/index.js` is 34,859 B gzip (1.0.0 was 33,868 B, +991 B): the engine's shell grew (the HUD preset contract, the drag, the kernel's frame cap) and the Board UI kit's CSS with it. Without the kit's CSS the build is 31,697 B (1.0.0: 30,850 B). The budget moves from 34,500 to 35,500 B.
+
 ## 1.0.0: on Fizlet
 
 The engine cut (DOM VIRUS ENGINE.md E3): Byte Runner runs on Fizlet 0.13.0 instead of the DOM VIRUS core snapshot. Same game, same numbers; the controller API (`createByteRunner`, start/pause/resume/stop/destroy/getSnapshot) and the snapshot fields are unchanged.
