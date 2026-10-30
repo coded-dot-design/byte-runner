@@ -1,6 +1,6 @@
 {
   "source": "byte-runner",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "sprites": {
     "runner": {
       "viewBox": "-2 -1 28 31",
