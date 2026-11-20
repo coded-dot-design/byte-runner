@@ -1,7 +1,7 @@
 {
   "id": "byte-runner",
   "author": "Chris Cooley",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "name": "Byte Runner",
   "kind": "DOM CHASE",
   "tagline": "Follow the bites. Eat the page.",
