@@ -2,7 +2,7 @@
 
 > **Play it and read about it on DOM Virus:** https://domvirus.com/games/byte-runner/ — this README holds the full technical details.
 
-**The page is the game board.** A small, independent MIT-licensed DOM arcade game in the DOM VIRUS collection. Created by **Chris Cooley / coded.design**.
+**The page is the game board.** A small, independent DOM arcade game in the DOM VIRUS collection. Created by **Chris Cooley / coded.design**.
 
 Food trails follow real UI whitespace and gutters, with small pixel squares, larger glowing power squares, and fruit. The round green frog can leave the trails to eat real page letters; only explicitly marked walls and controls block it. Clear food for a 500 × level bonus. Power makes flies edible for six seconds (stacking to nine). Three lives. Up to five flies arrive immediately, building toward nine on the first level and twelve later where space permits.
 
@@ -15,7 +15,7 @@ This repository is the game package. The game page lives on the DOM Virus hub at
 Use Node 24 (see `.nvmrc`), npm and Git:
 
 ```sh
-git clone https://github.com/coded-dot-design/byte-runner.git
+git clone https://github.com/fizlet/byte-runner.git
 cd byte-runner
 npm ci
 npm run dev:playground
@@ -40,12 +40,12 @@ Copy this repository's `dist/index.js` into your website assets. It contains the
 </script>
 ```
 
-The import is deferred until the player clicks. Keep the MIT license with redistributed code. No npm registry publication is required for this approach.
+The import is deferred until the player clicks. No npm registry publication is required for this approach.
 
 ## npm-compatible install
 
 ```sh
-npm install github:coded-dot-design/byte-runner#v1.0.0
+npm install github:fizlet/byte-runner#v1.0.0
 ```
 
 ```js
@@ -107,15 +107,15 @@ npm run test:browser     # the built package in Chromium (CHROMIUM_PATH picks a 
 npm run playground:build
 ```
 
-Byte Runner runs on [Fizlet](https://github.com/coded-dot-design/fizlet), the micro animation and game engine for the DOM. `src/world.ts` owns the rules as one Fizlet system: DOM-free, on typed arrays, so a step never allocates (tested: 20,000 busy steps, no minor GC) and the same seed with the same inputs replays the same run (tested). `src/maze.ts` builds the connected trails from the page's layout in the read phase, and `src/graph.ts` compiles them into fixed arrays with a spatial index of the food for the steps. `src/presentation.ts` owns the native SVG sprites and food. `src/rules.ts` owns balance constants. `src/game.ts` is the game's definition on `fizlet/arcade`, the shell shared with Null Invaders (engine per run, page as the board, scoreboard, keys, touch pad, sound, sparks, popups and the controller). `src/index.ts` exposes the factory. `vendor/fizlet/` is a generated snapshot of Fizlet with its provenance in `vendor/fizlet/ORIGIN.json`; never edit it by hand: change Fizlet, then run `npm run sync` (from a sibling `fizlet` checkout) and rebuild.
+Byte Runner runs on [Fizlet](https://github.com/fizlet/fzlt), the micro animation and game engine for the DOM. `src/world.ts` owns the rules as one Fizlet system: DOM-free, on typed arrays, so a step never allocates (tested: 20,000 busy steps, no minor GC) and the same seed with the same inputs replays the same run (tested). `src/maze.ts` builds the connected trails from the page's layout in the read phase, and `src/graph.ts` compiles them into fixed arrays with a spatial index of the food for the steps. `src/presentation.ts` owns the native SVG sprites and food. `src/rules.ts` owns balance constants. `src/game.ts` is the game's definition on `fizlet/arcade`, the shell shared with Null Invaders (engine per run, page as the board, scoreboard, keys, touch pad, sound, sparks, popups and the controller). `src/index.ts` exposes the factory. `vendor/fizlet/` is a generated snapshot of Fizlet with its provenance in `vendor/fizlet/ORIGIN.json`; never edit it by hand: change Fizlet, then run `npm run sync` (from a sibling `fizlet` checkout) and rebuild.
 
-`dist/index.js` is **35,363 B gzip** (1.0.2, Fizlet 0.20.0; 1.0.1 was 34,859 B; 1.0.0 was 33,868 B) and budgeted at 35,500 B (`npm run size`, `scripts/size.mjs`, fails the build above that); 0.10.2 on the DOM VIRUS core was 29,160 B. The Board UI kit's CSS (keys, readouts, toast, touch pad: the family's one button language) is 3,105 B of 1.0.1's build; that build without the CSS is 31,697 B. Runtime entities and geometry work are capped: at most 952 routing candidates during layout, 420 food nodes, twelve flies and one bonus fruit. Safe text runs, gutter connections, whitespace branches and broad loops become playable trails. Tests and Vite never ship in the package. See the [reference study](https://github.com/coded-dot-design/dom-virus/blob/main/REFERENCES.md).
+`dist/index.js` is **35,363 B gzip** (1.0.2, Fizlet 0.20.0; 1.0.1 was 34,859 B; 1.0.0 was 33,868 B) and budgeted at 35,500 B (`npm run size`, `scripts/size.mjs`, fails the build above that); 0.10.2 on the DOM VIRUS core was 29,160 B. The Board UI kit's CSS (keys, readouts, toast, touch pad: the family's one button language) is 3,105 B of 1.0.1's build; that build without the CSS is 31,697 B. Runtime entities and geometry work are capped: at most 952 routing candidates during layout, 420 food nodes, twelve flies and one bonus fruit. Safe text runs, gutter connections, whitespace branches and broad loops become playable trails. Tests and Vite never ship in the package. See the [reference study](https://github.com/fizlet/dom-virus/blob/main/REFERENCES.md).
 
 ## First-cut support
 
 Modern browsers with Canvas 2D, Shadow DOM and Intl.Segmenter. CSS Highlights are optional and only color already-mutated digits. Text replacement and Recall work without that API. Cross-origin frames and closed shadow roots are outside the board. Choose a content root and exclusions carefully for framework-driven or frequently changing pages.
 
-MIT © 2026 Chris Cooley. Original character artwork is procedural and included under the same license.
+© 2026 Chris Cooley. All rights reserved (LICENSE). Versions up to and including 1.0.2 were released under the MIT license, and copies of those keep it. The Fizlet engine in `vendor/fizlet/` stays MIT (THIRD_PARTY_NOTICES.md).
 
 ## Version tags
 

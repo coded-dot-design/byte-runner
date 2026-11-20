@@ -2,8 +2,8 @@
   "name": "@coded-design/byte-runner",
   "version": "1.0.2",
   "type": "module",
-  "description": "Byte Runner: a tiny MIT-licensed DOM arcade game by coded.design",
-  "license": "MIT",
+  "description": "Byte Runner: a tiny DOM arcade game by coded.design",
+  "license": "UNLICENSED",
   "author": "Chris Cooley",
   "sideEffects": [
     "./site-kit/**",
@@ -29,7 +29,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/coded-dot-design/byte-runner.git"
+    "url": "https://github.com/fizlet/byte-runner.git"
   },
   "engines": {
     "node": ">=22.23.4"
